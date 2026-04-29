@@ -190,8 +190,8 @@ sub _push_tags {
         };
 
         eval {
-            my $iter = $docker->images->push(image => $tag);
-            while (my $event = $iter->next) {
+            my $events = $docker->images->push(image => $tag);
+            for my $event (@{$events // []}) {
                 $push_progress->($event);
                 if ($event->{aux} && $event->{aux}{Digest}) {
                     $$result_ref->{digest} = $event->{aux}{Digest};
@@ -226,8 +226,8 @@ sub push_image {
     my $image_ref = $arg{image_ref};
     my $auth = $arg{auth};
 
-    my $iter = $self->docker->images->push(image => $image_ref);
-    while (my $event = $iter->next) {
+    my $events = $self->docker->images->push(image => $image_ref);
+    for my $event (@{$events // []}) {
         if ($event->{errorDetail}) {
             $self->logger_fatal->("Push error: " . $event->{errorDetail}{message});
         }
