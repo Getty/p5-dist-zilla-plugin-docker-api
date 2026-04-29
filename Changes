@@ -1,0 +1,10 @@
+{{$NEXT}}
+
+0.001  2026-04-29
+  - Initial release
+  -phase=build: local Docker image from Dist::Zilla build_root
+  - phase=release: build and push Docker image from release archive
+  - Tag templates: %n (name), %v (version), %g (short git SHA), etc.
+  - Context modes: build (build_root), source (zilla root), archive (release tarball)
+  - Configurable labels and build args via template expansion
+  - Registry auth via Docker daemon defaults or env vars
