@@ -1,6 +1,6 @@
 package Dist::Zilla::Plugin::Docker::API::Result;
 # ABSTRACT: Result object from Docker image build/push operations
-
+our $VERSION = '0.002';
 use Moo;
 use Types::Standard qw(Str ArrayRef);
 

@@ -1,6 +1,6 @@
 package Dist::Zilla::Plugin::Docker::API::Context;
 # ABSTRACT: Build context resolver for Docker image builds
-
+our $VERSION = '0.002';
 use Moo;
 use Types::Standard qw(Str InstanceOf);
 use Path::Tiny;
