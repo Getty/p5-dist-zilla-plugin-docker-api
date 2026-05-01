@@ -4,9 +4,7 @@ our $VERSION = '0.002';
 use Moose;
 with 'Dist::Zilla::Role::Plugin';
 with 'Dist::Zilla::Role::AfterBuild';
-with 'Dist::Zilla::Role::BeforeRelease';
 with 'Dist::Zilla::Role::Releaser';
-with 'Dist::Zilla::Role::AfterRelease';
 
 use namespace::autoclean;
 use Log::Any qw($log);
@@ -17,16 +15,27 @@ use Dist::Zilla::Plugin::Docker::API::Context;
 use Dist::Zilla::Plugin::Docker::API::Client;
 use Dist::Zilla::Plugin::Docker::API::Result;
 
-has _phase => (
-    is      => 'ro',
-    isa     => 'Str',
-    default => 'build',
-);
-
-has repository => (
+# Primary attributes
+has image => (
     is       => 'ro',
     isa      => 'Str',
     required => 1,
+    init_arg => 'image',
+);
+
+# Backward compatibility alias
+has repository => (
+    is       => 'ro',
+    isa      => 'Str',
+    lazy     => 1,
+    default  => sub { shift->image },
+);
+
+has dockerfile => (
+    is      => 'ro',
+    isa     => 'Str',
+    default => 'Dockerfile',
+    init_arg => 'file',
 );
 
 has _file => (
@@ -35,10 +44,22 @@ has _file => (
     default => 'Dockerfile',
 );
 
-has tag => (
+has context => (
+    is      => 'ro',
+    isa     => 'Str',
+    default => 'build',
+);
+
+has build_tag => (
     is      => 'ro',
     isa     => 'ArrayRef[Str]',
     default => sub { ['latest'] },
+);
+
+has release_tag => (
+    is      => 'ro',
+    isa     => 'ArrayRef[Str]',
+    default => sub { ['%v'] },
 );
 
 has build_arg => (
@@ -59,18 +80,49 @@ has platform => (
     default => sub { [] },
 );
 
-has push => (
-    is      => 'ro',
-    isa     => 'Bool',
-    default => sub { $_[0]->_phase eq 'release' },
-);
-
-has load => (
+# Build behavior
+has build_load => (
     is      => 'ro',
     isa     => 'Bool',
     default => 1,
 );
 
+# Deprecated alias
+has load => (
+    is      => 'ro',
+    isa     => 'Bool',
+    lazy    => 1,
+    default => sub { shift->build_load },
+);
+
+# Release behavior
+has release_push => (
+    is      => 'ro',
+    isa     => 'Bool',
+    default => 1,
+);
+
+# Deprecated alias
+has push => (
+    is      => 'ro',
+    isa     => 'Bool',
+    lazy    => 1,
+    default => sub { shift->release_push },
+);
+
+has release_load => (
+    is      => 'ro',
+    isa     => 'Bool',
+    default => 0,
+);
+
+has release_enabled => (
+    is      => 'ro',
+    isa     => 'Bool',
+    default => 1,
+);
+
+# Common options
 has pull => (
     is      => 'ro',
     isa     => 'Bool',
@@ -95,28 +147,32 @@ has force_rm => (
     default => 1,
 );
 
-has _target => (
+has target => (
     is      => 'ro',
     isa     => 'Str',
     default => '',
+    init_arg => '_target',
 );
 
-has _network_mode => (
+has network_mode => (
     is      => 'ro',
     isa     => 'Str',
     default => '',
+    init_arg => '_network_mode',
 );
 
-has _fail_if_tag_exists => (
+has fail_if_tag_exists => (
     is      => 'ro',
     isa     => 'Bool',
     default => 0,
+    init_arg => '_fail_if_tag_exists',
 );
 
-has _skip_latest_on_trial => (
+has skip_latest_on_trial => (
     is      => 'ro',
     isa     => 'Bool',
     default => 1,
+    init_arg => '_skip_latest_on_trial',
 );
 
 has _allow_dirty => (
@@ -164,24 +220,23 @@ sub _build_config {
     my $ctx = $self->_context;
     my $context_mode = ref($ctx) eq 'Dist::Zilla::Plugin::Docker::API::Context' ? $ctx->mode : $ctx;
     return Dist::Zilla::Plugin::Docker::API::Config->new(
-        repository           => $self->repository,
-        phase                => $self->_phase,
+        repository           => $self->image,
         context              => $context_mode,
-        file                 => $self->_file,
-        tags                 => $self->tag,
+        file                 => $self->dockerfile,
+        tags                 => $self->build_tag,  # default to build_tag, will be overridden per phase
         build_args           => $self->build_arg,
         labels               => $self->label,
         platforms            => $self->platform,
-        push                 => $self->push,
-        load                 => $self->load,
+        push                 => $self->release_push,
+        load                 => $self->build_load,
         pull                 => $self->pull,
         no_cache             => $self->no_cache,
         rm                   => $self->rm,
         force_rm             => $self->force_rm,
-        target               => $self->_target,
-        network_mode         => $self->_network_mode,
-        fail_if_tag_exists   => $self->_fail_if_tag_exists,
-        skip_latest_on_trial => $self->_skip_latest_on_trial,
+        target               => $self->target,
+        network_mode         => $self->network_mode,
+        fail_if_tag_exists   => $self->fail_if_tag_exists,
+        skip_latest_on_trial => $self->skip_latest_on_trial,
         allow_dirty          => $self->_allow_dirty,
     );
 }
@@ -196,11 +251,11 @@ sub _build_tag_template {
 
 sub _build_context {
     my ($self) = @_;
-    my $mode = $self->{_context} // ($self->_phase eq 'release' ? 'archive' : 'build');
+    my $mode = $self->{context} // 'build';
     return Dist::Zilla::Plugin::Docker::API::Context->new(
         zilla    => $self->zilla,
         mode     => $mode,
-        file     => $self->_file,
+        file     => $self->dockerfile,
     );
 }
 
@@ -218,24 +273,19 @@ sub tag_template { shift->_tag_template }
 sub context_resolver { shift->_context }
 sub client { shift->_client }
 
-sub phase { shift->_phase }
-sub context { shift->_context }
-sub file { shift->_file }
-
-sub _context_mode { shift->_context }
+sub file { shift->dockerfile }
 
 sub after_build {
     my ($self, $arg) = @_;
-    return unless $self->phase eq 'build';
 
-    $self->log("Docker::API phase=build starting");
+    $self->log("Docker::API building image");
 
     my $build_root = $arg->{build_root};
     my $zilla = $self->zilla;
 
     my %tmpl_vars = $self->_template_vars($build_root, undef, $arg->{archive});
 
-    my @image_refs = $self->_resolve_tags(%tmpl_vars);
+    my @image_refs = $self->_resolve_tags($self->build_tag, %tmpl_vars);
     my %labels = $self->_resolve_labels(%tmpl_vars);
     my %build_args = $self->_resolve_build_args(%tmpl_vars);
 
@@ -259,23 +309,37 @@ sub after_build {
     $self->_log_build_result($result);
 }
 
-sub before_release {
+sub release {
     my ($self, $archive) = @_;
-    return unless $self->phase eq 'release';
 
-    $self->log("Docker::API phase=release preflight");
+    # Skip if release is disabled
+    return unless $self->release_enabled;
+
+    # If no release tags configured, skip
+    return unless @{$self->release_tag};
+
+    $self->log("Docker::API release: tagging and " . ($self->release_push ? "pushing" : "tagging only"));
 
     my $zilla = $self->zilla;
     my %tmpl_vars = $self->_template_vars($zilla->root, $zilla->version, $archive);
 
-    my @tags = @{ $self->config->tags };
+    my @tags = @{ $self->release_tag };
 
-    if ($self->config->skip_latest_on_trial && $zilla->is_trial) {
+    if ($self->skip_latest_on_trial && $zilla->is_trial) {
         @tags = grep { $_ ne 'latest' } @tags;
         $self->log("Skipping 'latest' tag for trial release");
     }
 
-    if ($self->config->fail_if_tag_exists) {
+    # Get source image from first build_tag
+    my $source_image_ref = $self->image . ':' . $self->tag_template->expand($self->build_tag->[0], %tmpl_vars);
+
+    # Verify it exists locally
+    unless ($self->client->image_exists_locally($source_image_ref)) {
+        $self->log_fatal("Source image '$source_image_ref' not found locally. Run 'dzil build' first.");
+    }
+
+    # Check if tag exists on remote (if we're going to push)
+    if ($self->release_push && $self->fail_if_tag_exists) {
         for my $tag (@tags) {
             my $image_ref = $self->_image_ref($tag, %tmpl_vars);
             if ($self->client->remote_tag_exists($image_ref)) {
@@ -284,58 +348,30 @@ sub before_release {
         }
     }
 
-    $self->log("Preflight complete, ready for release");
-}
-
-sub release {
-    my ($self, $archive) = @_;
-    return unless $self->phase eq 'release';
-
-    $self->log("Docker::API phase=release building and pushing");
-
-    my $zilla = $self->zilla;
-    my %tmpl_vars = $self->_template_vars($zilla->root, $zilla->version, $archive);
-
-    my @tags = @{ $self->config->tags };
-
-    if ($self->config->skip_latest_on_trial && $zilla->is_trial) {
-        @tags = grep { $_ ne 'latest' } @tags;
+    # Tag existing image with release tags
+    my @image_refs = $self->_resolve_tags(\@tags, %tmpl_vars);
+    for my $target_ref (@image_refs) {
+        eval {
+            $self->client->tag_image(source => $source_image_ref, target => $target_ref);
+            $self->log("Tagged: $target_ref");
+        };
+        if ($@) {
+            $self->log("Warning: failed to tag as $target_ref: $@");
+        }
     }
 
-    my @image_refs = $self->_resolve_tags(%tmpl_vars, tags => \@tags);
-    my %labels = $self->_resolve_labels(%tmpl_vars);
-    my %build_args = $self->_resolve_build_args(%tmpl_vars);
-
-    my $context_tar = $self->context_resolver->resolve(
-        build_root => undef,
-        archive => $archive,
-    );
-
-    my $result = $self->client->build_image(
-        context_tar => $context_tar,
-        dockerfile  => $self->config->file,
-        tags        => \@image_refs,
-        labels      => \%labels,
-        buildargs   => \%build_args,
-        pull        => $self->config->pull,
-        nocache     => $self->config->no_cache,
-        rm          => $self->config->rm,
-        forcerm     => $self->config->force_rm,
-        push        => $self->config->push,
-    );
-
-    $self->_log_build_result($result);
-
-    if ($self->config->push && $result->digest) {
-        $self->log("Digest: " . $result->digest);
+    # Push if enabled
+    if ($self->release_push) {
+        for my $image_ref (@image_refs) {
+            $self->log("Pushing $image_ref...");
+            eval {
+                $self->client->push_image(image_ref => $image_ref);
+            };
+            if ($@) {
+                $self->log("Warning: failed to push $image_ref: $@");
+            }
+        }
     }
-}
-
-sub after_release {
-    my ($self, $archive) = @_;
-    return unless $self->phase eq 'release';
-
-    $self->log("Docker::API phase=release complete");
 }
 
 sub _template_vars {
@@ -388,15 +424,14 @@ sub _git_info {
 }
 
 sub _resolve_tags {
-    my ($self, %vars) = @_;
-    my @tags = @{ $self->config->tags };
-    return map { $self->_image_ref($_, %vars) } @tags;
+    my ($self, $tags, %vars) = @_;
+    return map { $self->_image_ref($_, %vars) } @{$tags};
 }
 
 sub _image_ref {
     my ($self, $tag, %vars) = @_;
     my $expanded = $self->tag_template->expand($tag, %vars);
-    return $self->config->repository . ':' . $expanded;
+    return $self->image . ':' . $expanded;
 }
 
 sub _resolve_labels {
@@ -446,7 +481,7 @@ sub _log_build_result {
 
 __PACKAGE__->meta->make_immutable;
 
-sub mvp_multivalue_args { qw(tag build_arg label platform) }
+sub mvp_multivalue_args { qw(build_tag release_tag build_arg label platform) }
 
 1;
 
@@ -455,74 +490,58 @@ __END__
 =head1 SYNOPSIS
 
     [Docker::API]
-    phase      = build
-    repository = ghcr.io/example/my-app
-    context    = build
-    file       = Dockerfile
+    image = ghcr.io/example/my-app
 
-    tag = latest
-    tag = build-%v
+    build_tag = latest
+    build_tag = test-%v
 
-    push = 0
-    load = 1
+    release_tag = %v
+    release_tag = latest
 
-Or for release:
+    dockerfile = Dockerfile
+    context = archive
 
-    [Docker::API / release]
-    phase      = release
-    repository = ghcr.io/example/my-app
-    context    = archive
+    build_load = 1
+    release_push = 1
 
-    tag = %v
-    tag = v%v
-    tag = latest
+Or via pluginbundle:
 
-    push = 1
-    fail_if_tag_exists = 1
-    skip_latest_on_trial = 1
+    [@Author::GETTY]
+    docker_image = ghcr.io/example/my-app
+    docker_build = latest
+    docker_release = %v
 
 =head1 DESCRIPTION
 
 This plugin builds and publishes Docker images as release artifacts derived from
-the Dist::Zilla-built distribution. The Docker image is built from the files that
-Dist::Zilla generated, including munged modules, generated Makefile.PL/Build.PL,
-generated META files, and injected files.
+the Dist::Zilla-built distribution.
 
-=head1 ROLE REQUIREMENTS
+=head1 BEHAVIOR
 
-This plugin consumes the following roles:
-
-=over 4
-
-=item L<Dist::Zilla::Role::Plugin>
-
-=item L<Dist::Zilla::Role::AfterBuild>
-
-=item L<Dist::Zilla::Role::BeforeRelease>
-
-=item L<Dist::Zilla::Role::Releaser>
-
-=item L<Dist::Zilla::Role::AfterRelease>
-
-=back
+| Dzil command | Docker behavior |
+|---|---|
+| C<dzil build> | Build image, apply C<build_tag>, load into daemon (if C<build_load=1>), no push |
+| C<dzil release> | Build image from release artifact, apply C<release_tag>, push (if C<release_push=1>), load (if C<release_load=1>) |
 
 =head1 CONFIGURATION
 
 =over 4
 
-=item C<phase> - When to run. C<build> (default), C<release>, or C<after_release>
+=item C<image> - Full image repository (required). Example: C<ghcr.io/user/my-app>
 
-=item C<repository> - Full image repository (required)
+=item C<build_tag> - Tags applied during C<dzil build>. Default: C<latest>
+
+=item C<release_tag> - Tags applied and pushed during C<dzil release>. Default: C<%v>
+
+=item C<dockerfile> - Dockerfile name (default: C<Dockerfile>)
 
 =item C<context> - Build context mode: C<build> (default), C<source>, or C<archive>
 
-=item C<file> - Dockerfile name (default: C<Dockerfile>)
+=item C<build_load> - Load built image into local Docker daemon (default: true)
 
-=item C<tag> - Image tags (can be repeated). Templates: C<%n>, C<%v>, C<%g>, etc.
+=item C<release_push> - Push to registry during release (default: true)
 
-=item C<push> - Push to registry (default: true for release, false for build)
-
-=item C<load> - Load into local Docker daemon (default: true)
+=item C<release_load> - Load released image locally (default: false)
 
 =item C<fail_if_tag_exists> - Error if tag already exists on remote
 
@@ -531,6 +550,24 @@ This plugin consumes the following roles:
 =item C<build_arg> - Build arguments (can be repeated, template-enabled)
 
 =item C<label> - OCI labels (can be repeated, template-enabled)
+
+=back
+
+=head1 BACKWARD COMPATIBILITY
+
+The following deprecated names are still supported but may be removed in a future release:
+
+=over 4
+
+=item C<repository> - Use C<image> instead
+
+=item C<phase> - No longer needed; behavior is implicit based on dzil command
+
+=item C<tag> - Use C<build_tag> or C<release_tag> instead
+
+=item C<push> - Use C<release_push> instead
+
+=item C<load> - Use C<build_load> instead
 
 =back
 

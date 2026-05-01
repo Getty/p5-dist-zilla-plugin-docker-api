@@ -1,14 +1,13 @@
 {{$NEXT}}
 
-0.001     2026-04-29 04:41:22Z
+0.002     2026-05-01
 
-0.001  2026-04-29
-  - Initial release
-  - phase=build: local Docker image from Dist::Zilla build_root
-  - phase=release: build and push Docker image from release archive
-  - Tag templates: %n (name), %v (version), %g (short git SHA), etc.
-  - Context modes: build (build_root), source (zilla root), archive (release tarball)
-  - Configurable labels and build args via template expansion
-  - Registry auth via Docker daemon defaults or env vars
-  - Streaming Docker progress events with real-time log output
-  - Configurable build options: pull, no_cache, rm, force_rm
+  - BREAKING: Remove phase concept. Use build_tag/release_tag instead.
+    Build uses build_tag (default: 'latest'), release uses release_tag (default: '%v').
+  - release() is now tag-only (no rebuild from archive). Tags existing built image.
+  - Add release_enabled (default: 1) to enable/disable release() entirely.
+  - Add release_push (default: 1) to control push during release.
+  - Add %vmaj and %vmin template vars for major/minor version extraction.
+  - Add image_exists_locally() and tag_image() methods to Client.
+  - Remove BeforeRelease and AfterRelease roles (no longer needed).
+  - docker_local support in @Author::GETTY: tag locally but never push.

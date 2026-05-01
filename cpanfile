@@ -1,8 +1,6 @@
 requires 'Dist::Zilla::Role::Plugin';
 requires 'Dist::Zilla::Role::AfterBuild';
-requires 'Dist::Zilla::Role::BeforeRelease';
 requires 'Dist::Zilla::Role::Releaser';
-requires 'Dist::Zilla::Role::AfterRelease';
 requires 'API::Docker';
 requires 'Moo';
 requires 'Types::Standard';
