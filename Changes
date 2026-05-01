@@ -1,15 +1,8 @@
 {{$NEXT}}
 
-0.002     2026-05-01 23:46:36Z
-
-0.002     2026-05-01
-
-  - BREAKING: Remove phase concept. Use build_tag/release_tag instead.
-    Build uses build_tag (default: 'latest'), release uses release_tag (default: '%v').
-  - release() is now tag-only (no rebuild from archive). Tags existing built image.
-  - Add release_enabled (default: 1) to enable/disable release() entirely.
-  - Add release_push (default: 1) to control push during release.
-  - Add %vmaj and %vmin template vars for major/minor version extraction.
-  - Add image_exists_locally() and tag_image() methods to Client.
-  - Remove BeforeRelease and AfterRelease roles (no longer needed).
-  - docker_local support in @Author::GETTY: tag locally but never push.
+  - Initial release
+  - Build Docker images from Dist::Zilla build root
+  - Apply build_tag during build, release_tag during release
+  - release() tags existing built image (no rebuild)
+  - Template variables: %v, %vmaj, %vmin, %n, %g, %G, %b, %d, %o, %a, %p
+  - Support for docker_local in @Author::GETTY: tag locally but never push
