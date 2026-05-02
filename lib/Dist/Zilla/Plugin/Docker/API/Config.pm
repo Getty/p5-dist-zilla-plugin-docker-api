@@ -1,6 +1,6 @@
 package Dist::Zilla::Plugin::Docker::API::Config;
 # ABSTRACT: Normalized immutable configuration object for Docker::API plugin
-our $VERSION = '0.003';
+our $VERSION = '0.004';
 use Moo;
 use Types::Standard qw(Str ArrayRef Bool);
 

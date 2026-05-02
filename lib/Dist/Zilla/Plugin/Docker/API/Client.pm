@@ -1,6 +1,6 @@
 package Dist::Zilla::Plugin::Docker::API::Client;
 # ABSTRACT: Thin adapter around API::Docker
-our $VERSION = '0.003';
+our $VERSION = '0.004';
 use Moo;
 use Path::Tiny;
 
