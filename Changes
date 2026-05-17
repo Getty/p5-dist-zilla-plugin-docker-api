@@ -1,4 +1,4 @@
-{{$NEXT}}
+0.102     2026-05-17 15:56:39Z
   - Fix release push: every push failed against real registries with
     `Docker API error (400): missing X-Registry-Auth: invalid
     X-Registry-Auth header: EOF`, because neither the plugin nor
