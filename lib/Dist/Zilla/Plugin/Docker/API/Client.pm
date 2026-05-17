@@ -38,6 +38,9 @@ sub build_image {
     my $rm = $arg{rm} // 1;
     my $forcerm = $arg{forcerm} // 1;
     my $push = $arg{push} // 0;
+    my $target = $arg{target};
+    my $network_mode = $arg{network_mode};
+    my $platform = $arg{platform};
 
     my $docker = $self->docker;
 
@@ -52,6 +55,9 @@ sub build_image {
 
     $build_opts{labels} = \%labels if %labels;
     $build_opts{buildargs} = \%buildargs if %buildargs;
+    $build_opts{target} = $target if defined $target && length $target;
+    $build_opts{networkmode} = $network_mode if defined $network_mode && length $network_mode;
+    $build_opts{platform} = $platform if defined $platform && length $platform;
 
     my $image_id;
     my @processed_tags;
@@ -106,7 +112,7 @@ sub build_image {
     for my $tag (@tags) {
         next if $tag eq ($tags[0] // '');
         eval {
-            $docker->images->tag(image => $image_id, repo => $tag);
+            $docker->images->tag($image_id, repo => $tag);
         };
         if ($@) {
             $self->logger->("Warning: failed to tag image as $tag: $@");
@@ -190,7 +196,7 @@ sub _push_tags {
         };
 
         eval {
-            my $events = $docker->images->push(image => $tag);
+            my $events = $docker->images->push($tag);
             for my $event (@{$events // []}) {
                 $push_progress->($event);
                 if ($event->{aux} && $event->{aux}{Digest}) {
@@ -215,8 +221,8 @@ sub tag_image {
     my $target = $arg{target};
 
     $self->docker->images->tag(
-        image => $source,
-        repo  => $target,
+        $source,
+        repo => $target,
     );
 }
 
@@ -226,7 +232,7 @@ sub push_image {
     my $image_ref = $arg{image_ref};
     my $auth = $arg{auth};
 
-    my $events = $self->docker->images->push(image => $image_ref);
+    my $events = $self->docker->images->push($image_ref);
     for my $event (@{$events // []}) {
         if ($event->{errorDetail}) {
             $self->logger_fatal->("Push error: " . $event->{errorDetail}{message});
@@ -237,14 +243,14 @@ sub push_image {
 sub inspect_image {
     my ($self, $image_ref) = @_;
 
-    return $self->docker->images->inspect(image => $image_ref);
+    return $self->docker->images->inspect($image_ref);
 }
 
 sub image_exists_locally {
     my ($self, $image_ref) = @_;
 
     eval {
-        $self->docker->images->inspect(image => $image_ref);
+        $self->docker->images->inspect($image_ref);
     };
     return $@ ? 0 : 1;
 }

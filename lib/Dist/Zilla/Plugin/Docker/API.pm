@@ -294,16 +294,21 @@ sub after_build {
         archive => undef,
     );
 
+    my @platforms = @{ $self->config->platforms };
+
     my $result = $self->client->build_image(
-        context_tar => $context_tar,
-        dockerfile  => $self->config->file,
-        tags        => \@image_refs,
-        labels      => \%labels,
-        buildargs   => \%build_args,
-        pull        => $self->config->pull,
-        nocache     => $self->config->no_cache,
-        rm          => $self->config->rm,
-        forcerm     => $self->config->force_rm,
+        context_tar  => $context_tar,
+        dockerfile   => $self->config->file,
+        tags         => \@image_refs,
+        labels       => \%labels,
+        buildargs    => \%build_args,
+        pull         => $self->config->pull,
+        nocache      => $self->config->no_cache,
+        rm           => $self->config->rm,
+        forcerm      => $self->config->force_rm,
+        target       => $self->config->target,
+        network_mode => $self->config->network_mode,
+        platform     => $platforms[0],
     );
 
     $self->_log_build_result($result);

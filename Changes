@@ -1,5 +1,17 @@
 {{$NEXT}}
 
+  - Fix Client adapter: inspect/tag/push were calling API::Docker with
+    `image => $ref` keyword args, but API::Docker::API::Images expects
+    the image as the first positional argument. Result: release() always
+    failed with "Source image '...' not found locally" even when the
+    image was built and present in the daemon. All five call sites
+    converted to positional form.
+  - Pass `target`, `network_mode`, and `platform` through from the
+    plugin's Config into the actual Docker build call. Previously these
+    attributes were accepted in dist.ini but silently dropped, so
+    multi-stage Dockerfiles all built the default stage and produced
+    duplicate images across [Docker::API] instances.
+
 0.100     2026-05-17 01:23:05Z
 
   - Replace separate build_tag / release_tag with a single canonical `tag`
