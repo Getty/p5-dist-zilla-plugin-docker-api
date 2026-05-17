@@ -1,5 +1,15 @@
 {{$NEXT}}
 
+  - Replace separate build_tag / release_tag with a single canonical `tag`
+    attribute. The same list is applied at build (locally) and at release
+    (pushed). Default is `latest` plus `%v`.
+  - Deprecate `build_tag` and `release_tag`: still accepted, merged into
+    `tag` with a deprecation warning. Explicit `tag` wins and silences the
+    legacy values.
+  - Documentation: rewritten README and POD to match the actual current
+    attribute set; remove references to never-implemented `phase` /
+    `repository` config keys.
+
 0.003     2026-05-02 02:32:07Z
 
   - Initial release

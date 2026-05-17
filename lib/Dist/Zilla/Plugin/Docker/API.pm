@@ -50,17 +50,17 @@ has context => (
     default => 'build',
 );
 
-has build_tag => (
+# Canonical tag attribute: one list, applied both at build (locally) and
+# at release (pushed). Deprecated build_tag / release_tag funnel into here
+# via BUILDARGS.
+has tag => (
     is      => 'ro',
     isa     => 'ArrayRef[Str]',
-    default => sub { ['latest'] },
+    lazy    => 1,
+    builder => '_build_tag_default',
 );
 
-has release_tag => (
-    is      => 'ro',
-    isa     => 'ArrayRef[Str]',
-    default => sub { ['%v'] },
-);
+sub _build_tag_default { ['latest', '%v'] }
 
 has build_arg => (
     is      => 'ro',
@@ -223,7 +223,7 @@ sub _build_config {
         repository           => $self->image,
         context              => $context_mode,
         file                 => $self->dockerfile,
-        tags                 => $self->build_tag,  # default to build_tag, will be overridden per phase
+        tags                 => $self->tag,
         build_args           => $self->build_arg,
         labels               => $self->label,
         platforms            => $self->platform,
@@ -285,7 +285,7 @@ sub after_build {
 
     my %tmpl_vars = $self->_template_vars($build_root, undef, $arg->{archive});
 
-    my @image_refs = $self->_resolve_tags($self->build_tag, %tmpl_vars);
+    my @image_refs = $self->_resolve_tags($self->tag, %tmpl_vars);
     my %labels = $self->_resolve_labels(%tmpl_vars);
     my %build_args = $self->_resolve_build_args(%tmpl_vars);
 
@@ -315,23 +315,24 @@ sub release {
     # Skip if release is disabled
     return unless $self->release_enabled;
 
-    # If no release tags configured, skip
-    return unless @{$self->release_tag};
+    # If no tags configured, skip
+    return unless @{$self->tag};
 
     $self->log("Docker::API release: tagging and " . ($self->release_push ? "pushing" : "tagging only"));
 
     my $zilla = $self->zilla;
     my %tmpl_vars = $self->_template_vars($zilla->root, $zilla->version, $archive);
 
-    my @tags = @{ $self->release_tag };
+    my @tags = @{ $self->tag };
 
     if ($self->skip_latest_on_trial && $zilla->is_trial) {
         @tags = grep { $_ ne 'latest' } @tags;
         $self->log("Skipping 'latest' tag for trial release");
     }
 
-    # Get source image from first build_tag
-    my $source_image_ref = $self->image . ':' . $self->tag_template->expand($self->build_tag->[0], %tmpl_vars);
+    # Source image: first tag from the build phase (same list, but resolved
+    # via the same template). Build must have happened before release.
+    my $source_image_ref = $self->image . ':' . $self->tag_template->expand($self->tag->[0], %tmpl_vars);
 
     # Verify it exists locally
     unless ($self->client->image_exists_locally($source_image_ref)) {
@@ -479,9 +480,35 @@ sub _log_build_result {
     }
 }
 
-__PACKAGE__->meta->make_immutable;
+around BUILDARGS => sub {
+    my ($orig, $class, @args) = @_;
+    my $args = $class->$orig(@args);
 
-sub mvp_multivalue_args { qw(build_tag release_tag build_arg label platform) }
+    my @legacy = grep { exists $args->{$_} } qw(build_tag release_tag);
+    if (@legacy) {
+        warn "[Docker::API] '" . join("' and '", @legacy)
+           . "' are deprecated; use 'tag' instead.\n"
+           . "  They are merged into 'tag' for now and will be removed in a future release.\n";
+
+        my @merged;
+        push @merged, @{ delete $args->{build_tag} // [] };
+        push @merged, @{ delete $args->{release_tag} // [] };
+
+        if (exists $args->{tag}) {
+            warn "[Docker::API] 'tag' is set explicitly; ignoring deprecated build_tag/release_tag values.\n";
+        }
+        else {
+            my %seen;
+            $args->{tag} = [ grep { !$seen{$_}++ } @merged ];
+        }
+    }
+
+    return $args;
+};
+
+sub mvp_multivalue_args { qw(tag build_tag release_tag build_arg label platform) }
+
+__PACKAGE__->meta->make_immutable;
 
 1;
 
@@ -492,24 +519,20 @@ __END__
     [Docker::API]
     image = ghcr.io/example/my-app
 
-    build_tag = latest
-    build_tag = test-%v
-
-    release_tag = %v
-    release_tag = latest
+    tag = latest
+    tag = %v
 
     dockerfile = Dockerfile
-    context = archive
+    context    = archive
 
-    build_load = 1
+    build_load   = 1
     release_push = 1
 
-Or via pluginbundle:
+Or via the L<@Author::GETTY|Dist::Zilla::PluginBundle::Author::GETTY> bundle:
 
-    [@Author::GETTY]
-    docker_image = ghcr.io/example/my-app
-    docker_build = latest
-    docker_release = %v
+    [@Author::GETTY::Docker / runtime]
+    image = ghcr.io/example/my-app
+    tags  = latest %v
 
 =head1 DESCRIPTION
 
@@ -520,8 +543,12 @@ the Dist::Zilla-built distribution.
 
 | Dzil command | Docker behavior |
 |---|---|
-| C<dzil build> | Build image, apply C<build_tag>, load into daemon (if C<build_load=1>), no push |
-| C<dzil release> | Build image from release artifact, apply C<release_tag>, push (if C<release_push=1>), load (if C<release_load=1>) |
+| C<dzil build>   | Build image, apply every C<tag>, load into daemon (if C<build_load=1>), no push |
+| C<dzil release> | Re-tag the built image with every C<tag>, push (if C<release_push=1>), load (if C<release_load=1>) |
+
+The same C<tag> list is used in both phases — C<dzil build> produces local tags
+for verification, C<dzil release> re-applies them (against the already-built
+image) and pushes if configured.
 
 =head1 CONFIGURATION
 
@@ -529,9 +556,8 @@ the Dist::Zilla-built distribution.
 
 =item C<image> - Full image repository (required). Example: C<ghcr.io/user/my-app>
 
-=item C<build_tag> - Tags applied during C<dzil build>. Default: C<latest>
-
-=item C<release_tag> - Tags applied and pushed during C<dzil release>. Default: C<%v>
+=item C<tag> - Tags applied to the image (can be repeated, template-enabled).
+Default: C<latest> and C<%v>. Applied identically in both build and release.
 
 =item C<dockerfile> - Dockerfile name (default: C<Dockerfile>)
 
@@ -545,29 +571,37 @@ the Dist::Zilla-built distribution.
 
 =item C<fail_if_tag_exists> - Error if tag already exists on remote
 
-=item C<skip_latest_on_trial> - Skip 'latest' tag for trial releases
+=item C<skip_latest_on_trial> - Skip C<latest> tag for trial releases
 
 =item C<build_arg> - Build arguments (can be repeated, template-enabled)
 
 =item C<label> - OCI labels (can be repeated, template-enabled)
 
+=item C<platform> - Target platform (can be repeated)
+
 =back
 
-=head1 BACKWARD COMPATIBILITY
+=head1 DEPRECATED
 
-The following deprecated names are still supported but may be removed in a future release:
+The following names are still accepted but emit a warning and will be removed
+in a future release:
 
 =over 4
 
-=item C<repository> - Use C<image> instead
+=item C<build_tag>, C<release_tag>
 
-=item C<phase> - No longer needed; behavior is implicit based on dzil command
+Replaced by the single C<tag> attribute. When either is given, the values are
+merged (build_tag first, release_tag second) into C<tag> and a deprecation
+warning is emitted. If C<tag> is also set explicitly, it wins and the legacy
+values are ignored.
 
-=item C<tag> - Use C<build_tag> or C<release_tag> instead
+=item C<repository> - Use C<image> instead.
 
-=item C<push> - Use C<release_push> instead
+=item C<phase> - No longer needed; build and release phases are implicit.
 
-=item C<load> - Use C<build_load> instead
+=item C<push> - Use C<release_push> instead.
+
+=item C<load> - Use C<build_load> instead.
 
 =back
 
