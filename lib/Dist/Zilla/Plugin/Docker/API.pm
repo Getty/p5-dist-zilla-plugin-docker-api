@@ -8,11 +8,9 @@ with 'Dist::Zilla::Role::Releaser';
 
 use namespace::autoclean;
 use Log::Any qw($log);
+use Path::Tiny;
 
-use Dist::Zilla::Plugin::Docker::API::Config;
 use Dist::Zilla::Plugin::Docker::API::TagTemplate;
-use Dist::Zilla::Plugin::Docker::API::Context;
-use Dist::Zilla::Plugin::Docker::API::Client;
 use Dist::Zilla::Plugin::Docker::API::Result;
 
 # Primary attributes
@@ -36,18 +34,6 @@ has dockerfile => (
     isa     => 'Str',
     default => 'Dockerfile',
     init_arg => 'file',
-);
-
-has _file => (
-    is      => 'ro',
-    isa     => 'Str',
-    default => 'Dockerfile',
-);
-
-has context => (
-    is      => 'ro',
-    isa     => 'Str',
-    default => 'build',
 );
 
 # Canonical tag attribute: one list, applied both at build (locally) and
@@ -165,33 +151,18 @@ has fail_if_tag_exists => (
     is      => 'ro',
     isa     => 'Bool',
     default => 0,
-    init_arg => '_fail_if_tag_exists',
 );
 
 has skip_latest_on_trial => (
     is      => 'ro',
     isa     => 'Bool',
     default => 1,
-    init_arg => '_skip_latest_on_trial',
-);
-
-has _allow_dirty => (
-    is      => 'ro',
-    isa     => 'Bool',
-    default => 0,
 );
 
 has client_class => (
     is      => 'ro',
     isa     => 'Str',
     default => 'Dist::Zilla::Plugin::Docker::API::Client',
-);
-
-has _config => (
-    is      => 'ro',
-    isa     => 'Dist::Zilla::Plugin::Docker::API::Config',
-    lazy    => 1,
-    builder => '_build_config',
 );
 
 has _tag_template => (
@@ -201,45 +172,12 @@ has _tag_template => (
     builder => '_build_tag_template',
 );
 
-has _context => (
-    is      => 'ro',
-    isa     => 'Dist::Zilla::Plugin::Docker::API::Context',
-    lazy    => 1,
-    builder => '_build_context',
-);
-
 has _client => (
     is      => 'ro',
-    isa     => 'Dist::Zilla::Plugin::Docker::API::Client',
+    isa     => 'Object',
     lazy    => 1,
     builder => '_build_client',
 );
-
-sub _build_config {
-    my ($self) = @_;
-    my $ctx = $self->_context;
-    my $context_mode = ref($ctx) eq 'Dist::Zilla::Plugin::Docker::API::Context' ? $ctx->mode : $ctx;
-    return Dist::Zilla::Plugin::Docker::API::Config->new(
-        repository           => $self->image,
-        context              => $context_mode,
-        file                 => $self->dockerfile,
-        tags                 => $self->tag,
-        build_args           => $self->build_arg,
-        labels               => $self->label,
-        platforms            => $self->platform,
-        push                 => $self->release_push,
-        load                 => $self->build_load,
-        pull                 => $self->pull,
-        no_cache             => $self->no_cache,
-        rm                   => $self->rm,
-        force_rm             => $self->force_rm,
-        target               => $self->target,
-        network_mode         => $self->network_mode,
-        fail_if_tag_exists   => $self->fail_if_tag_exists,
-        skip_latest_on_trial => $self->skip_latest_on_trial,
-        allow_dirty          => $self->_allow_dirty,
-    );
-}
 
 sub _build_tag_template {
     my ($self) = @_;
@@ -249,28 +187,19 @@ sub _build_tag_template {
     );
 }
 
-sub _build_context {
-    my ($self) = @_;
-    my $mode = $self->{context} // 'build';
-    return Dist::Zilla::Plugin::Docker::API::Context->new(
-        zilla    => $self->zilla,
-        mode     => $mode,
-        file     => $self->dockerfile,
-    );
-}
-
 sub _build_client {
     my ($self) = @_;
     my $client_class = $self->client_class;
+    unless (eval "require $client_class; 1") {
+        $self->log_fatal("Cannot load client_class $client_class: $@");
+    }
     return $client_class->new(
         logger => sub { $self->log(@_) },
         logger_fatal => sub { $self->log_fatal(@_) },
     );
 }
 
-sub config { shift->_config }
 sub tag_template { shift->_tag_template }
-sub context_resolver { shift->_context }
 sub client { shift->_client }
 
 sub file { shift->dockerfile }
@@ -289,25 +218,31 @@ sub after_build {
     my %labels = $self->_resolve_labels(%tmpl_vars);
     my %build_args = $self->_resolve_build_args(%tmpl_vars);
 
-    my $context_tar = $self->context_resolver->resolve(
-        build_root => $build_root,
-        archive => undef,
-    );
+    my $context_path = Path::Tiny->new($build_root // $self->zilla->root);
+    unless ($context_path->child($self->dockerfile)->exists) {
+        $self->log_fatal("Dockerfile '" . $self->dockerfile
+            . "' not found in build context: $context_path");
+    }
+    my $context_tar = {
+        type       => 'dir',
+        path       => $context_path->stringify,
+        dockerfile => $self->dockerfile,
+    };
 
-    my @platforms = @{ $self->config->platforms };
+    my @platforms = @{ $self->platform };
 
     my $result = $self->client->build_image(
         context_tar  => $context_tar,
-        dockerfile   => $self->config->file,
+        dockerfile   => $self->dockerfile,
         tags         => \@image_refs,
         labels       => \%labels,
         buildargs    => \%build_args,
-        pull         => $self->config->pull,
-        nocache      => $self->config->no_cache,
-        rm           => $self->config->rm,
-        forcerm      => $self->config->force_rm,
-        target       => $self->config->target,
-        network_mode => $self->config->network_mode,
+        pull         => $self->pull,
+        nocache      => $self->no_cache,
+        rm           => $self->rm,
+        forcerm      => $self->force_rm,
+        target       => $self->target,
+        network_mode => $self->network_mode,
         platform     => $platforms[0],
     );
 
@@ -387,16 +322,16 @@ sub _template_vars {
     my $git = $self->_git_info;
 
     my %vars = (
-        n => $zilla->name,
-        v => $version // $zilla->version // '0',
-        t => ($zilla->is_trial ? '-TRIAL' : ''),
-        g => $git->{short_sha} // '',
-        G => $git->{full_sha} // '',
-        b => $git->{branch} // '',
-        d => $build_root // '',
-        o => $zilla->root // '',
-        a => $archive // '',
-        p => $self->plugin_name,
+        name          => $zilla->name,
+        version       => $version // $zilla->version // '0',
+        trial         => ($zilla->is_trial ? '-TRIAL' : ''),
+        git_short_sha => $git->{short_sha} // '',
+        git_full_sha  => $git->{full_sha} // '',
+        branch        => $git->{branch} // '',
+        build_root    => $build_root // '',
+        source_root   => $zilla->root // '',
+        archive       => $archive // '',
+        plugin_name   => $self->plugin_name,
     );
 
     return %vars;
@@ -405,28 +340,36 @@ sub _template_vars {
 sub _git_info {
     my ($self) = @_;
     return $self->{_git_info} //= do {
-        eval {
-            my $git_dir = $self->zilla->root;
-            my $head = Path::Tiny->path($git_dir, '.git', 'HEAD')->slurp_utf8;
-            chomp($head);
-            my $branch = '';
-            if ($head =~ /^ref: refs\/heads\/(.+)$/) {
-                $branch = $1;
-            }
-            my ($short_sha, $full_sha) = ('', '');
-            if (my $ref_file = Path::Tiny->path($git_dir, '.git', 'HEAD')->realpath) {
-                if ($ref_file->is_file && $ref_file->lines_count <= 1) {
-                    my $ref = $ref_file->slurp_utf8;
-                    chomp($ref);
-                    if ($ref =~ m{^([a-f0-9]{40})$}) {
-                        $full_sha = $1;
-                        $short_sha = substr($full_sha, 0, 7);
-                    }
-                }
-            }
-            { branch => $branch, short_sha => $short_sha, full_sha => $full_sha };
-        } // {};
+        my $root   = $self->zilla->root;
+        my $sha    = _git_capture($root, 'rev-parse', 'HEAD');
+        my $branch = _git_capture($root, 'rev-parse', '--abbrev-ref', 'HEAD');
+
+        my $full   = ($sha =~ /^([a-f0-9]{40})$/) ? $1 : '';
+        my $br     = ($branch ne '' && $branch ne 'HEAD') ? $branch : '';
+
+        {
+            full_sha  => $full,
+            short_sha => $full ? substr($full, 0, 7) : '',
+            branch    => $br,
+        };
     };
+}
+
+sub _git_capture {
+    my ($dir, @cmd) = @_;
+    my $pid = open(my $fh, '-|');
+    return '' unless defined $pid;
+    if ($pid == 0) {
+        chdir $dir or exit 1;
+        open STDERR, '>', '/dev/null';
+        exec 'git', @cmd;
+        exit 127;
+    }
+    my $out = do { local $/; <$fh> } // '';
+    close $fh;
+    return '' if $? != 0;
+    chomp $out;
+    return $out;
 }
 
 sub _resolve_tags {
@@ -443,7 +386,7 @@ sub _image_ref {
 sub _resolve_labels {
     my ($self, %vars) = @_;
     my %labels;
-    for my $label_def (@{ $self->config->labels }) {
+    for my $label_def (@{ $self->label }) {
         if ($label_def =~ /^([^=]+)=(.*)$/) {
             my ($key, $value) = ($1, $2);
             $labels{$key} = $self->tag_template->expand($value, %vars);
@@ -455,7 +398,7 @@ sub _resolve_labels {
 sub _resolve_build_args {
     my ($self, %vars) = @_;
     my %args;
-    for my $arg_def (@{ $self->config->build_args }) {
+    for my $arg_def (@{ $self->build_arg }) {
         if ($arg_def =~ /^([^=]+)=(.*)$/) {
             my ($key, $value) = ($1, $2);
             $args{$key} = $self->tag_template->expand($value, %vars);
@@ -528,7 +471,6 @@ __END__
     tag = %v
 
     dockerfile = Dockerfile
-    context    = archive
 
     build_load   = 1
     release_push = 1
@@ -565,8 +507,6 @@ image) and pushes if configured.
 Default: C<latest> and C<%v>. Applied identically in both build and release.
 
 =item C<dockerfile> - Dockerfile name (default: C<Dockerfile>)
-
-=item C<context> - Build context mode: C<build> (default), C<source>, or C<archive>
 
 =item C<build_load> - Load built image into local Docker daemon (default: true)
 
@@ -612,8 +552,6 @@ values are ignored.
 
 =head1 SEE ALSO
 
-L<Dist::Zilla::Plugin::Docker::API::Config>,
 L<Dist::Zilla::Plugin::Docker::API::TagTemplate>,
-L<Dist::Zilla::Plugin::Docker::API::Context>,
 L<Dist::Zilla::Plugin::Docker::API::Client>,
 L<Dist::Zilla::Plugin::Docker::API::Result>

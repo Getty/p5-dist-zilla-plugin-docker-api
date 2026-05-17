@@ -67,8 +67,6 @@ to the `docker` CLI.
 ```
 lib/Dist/Zilla/Plugin/Docker/API.pm           # main plugin
 lib/Dist/Zilla/Plugin/Docker/API/Client.pm    # API::Docker adapter
-lib/Dist/Zilla/Plugin/Docker/API/Config.pm    # validated config
-lib/Dist/Zilla/Plugin/Docker/API/Context.pm   # build-context resolver
 lib/Dist/Zilla/Plugin/Docker/API/Result.pm    # build/push result object
 lib/Dist/Zilla/Plugin/Docker/API/TagTemplate.pm # %v / %g / %n expansion
 t/                                            # tests (prove -l t/)
@@ -95,10 +93,12 @@ cpanm --installdeps .            # install deps from cpanfile
   alias kept for now.
 - **`build_load` / `release_push` are the canonical switches.**
   `load` / `push` are deprecated aliases.
-- Underscore-prefixed `init_arg`s (e.g. `_target`, `_network_mode`,
-  `_fail_if_tag_exists`) exist so the `@Author::GETTY::Docker` bundle
-  can inject them without going through the public attribute names —
-  don't rename them lightly.
+- Underscore-prefixed `init_arg`s (`_target`, `_network_mode`) exist so
+  the `@Author::GETTY::Docker` bundle can inject them without exposing
+  them in user-facing dist.ini. `fail_if_tag_exists` and
+  `skip_latest_on_trial` are deliberately *not* hidden — users may set
+  them directly. Don't add an underscore prefix unless the bundle is
+  the sole writer.
 
 ## Testing notes
 

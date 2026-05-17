@@ -27,7 +27,6 @@ cpanm Dist::Zilla::Plugin::Docker::API
 [Docker::API]
 image      = ghcr.io/example/my-app
 dockerfile = Dockerfile
-context    = build
 
 tag = latest
 tag = %v
@@ -89,8 +88,7 @@ release_load = 0     # also load during release (default: 0)
 ### Build options
 
 ```ini
-dockerfile = Dockerfile     # name of the Dockerfile in the context root
-context    = build          # build, source, or archive
+dockerfile = Dockerfile     # name of the Dockerfile in the build root
 pull       = 0
 no_cache   = 0
 rm         = 1
@@ -188,9 +186,7 @@ $result->warnings;   # ArrayRef of non-fatal errors
 
 Helper classes:
 
-- `Dist::Zilla::Plugin::Docker::API::Config` — validated configuration
 - `Dist::Zilla::Plugin::Docker::API::TagTemplate` — template variable expansion
-- `Dist::Zilla::Plugin::Docker::API::Context` — build context resolver
 - `Dist::Zilla::Plugin::Docker::API::Client` — `API::Docker` adapter
 - `Dist::Zilla::Plugin::Docker::API::Result` — build/push result
 

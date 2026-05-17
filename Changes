@@ -11,6 +11,33 @@
     attributes were accepted in dist.ini but silently dropped, so
     multi-stage Dockerfiles all built the default stage and produced
     duplicate images across [Docker::API] instances.
+  - Fix template variables (`%v`, `%n`, `%g`, ...): _template_vars wrote
+    them under short keys (v, n, g) but TagTemplate looked them up under
+    long names (version, name, git_short_sha). Result: every template
+    expansion silently produced ''. Now writes the long-name keys.
+  - Fix `_git_info`: only matched a 40-char SHA against `.git/HEAD`, but
+    HEAD normally contains `ref: refs/heads/...`. So `%g`/`%G`/`%b` were
+    always empty for any normal branch checkout. Replaced with a safe
+    `git rev-parse` subprocess (no shell, core Perl only).
+  - Fix `fail_if_tag_exists` and `skip_latest_on_trial`: both had
+    init_arg `_fail_if_tag_exists`/`_skip_latest_on_trial`, but the
+    @Author::GETTY bundle (and dist.ini users) set them under the plain
+    names, so the values were silently ignored.
+  - Architecture: delete `Dist::Zilla::Plugin::Docker::API::Config` —
+    every attribute on it was a pass-through of the plugin's own
+    attribute, with three dead extras (`phase`, `client_class`,
+    `registry_auth_stash`). Plugin reads its own attributes directly.
+  - Architecture: inline `Dist::Zilla::Plugin::Docker::API::Context` —
+    only the `build` branch was ever exercised; the `source` and
+    `archive` branches were never wired in. The `context` attribute is
+    removed.
+  - Architecture: make `client_class` a real seam — `_build_client` now
+    dynamically requires the configured class, so tests can inject a
+    recording fake (see `t/lib/.../Client/Recorder.pm`).
+  - Remove dead attributes `_file` and `_allow_dirty` (never read).
+  - Add end-to-end test `t/40-build-and-release.t` exercising
+    after_build + release through the Recorder fake — no Docker daemon
+    required.
 
 0.100     2026-05-17 01:23:05Z
 
