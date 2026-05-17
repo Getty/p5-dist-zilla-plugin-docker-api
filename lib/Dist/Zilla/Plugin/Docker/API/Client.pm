@@ -349,15 +349,6 @@ sub inspect_image {
     return $self->docker->images->inspect($image_ref);
 }
 
-sub image_exists_locally {
-    my ($self, $image_ref) = @_;
-
-    eval {
-        $self->docker->images->inspect($image_ref);
-    };
-    return $@ ? 0 : 1;
-}
-
 sub remote_tag_exists {
     my ($self, $image_ref) = @_;
 

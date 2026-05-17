@@ -18,11 +18,6 @@ has image_id_to_return => (
     default => sub { 'sha256:deadbeef' },
 );
 
-has locally_present => (
-    is      => 'rw',
-    default => sub { {} },     # image_ref => 1
-);
-
 sub _record {
     my ($self, $name, %args) = @_;
     push @{ $self->calls }, { method => $name, %args };
@@ -33,7 +28,6 @@ sub build_image {
     $self->_record('build_image', %arg);
 
     my @tags = @{ $arg{tags} // [] };
-    $self->locally_present->{$_} = 1 for @tags;
 
     return Dist::Zilla::Plugin::Docker::API::Result->new(
         image_id => $self->image_id_to_return,
@@ -45,7 +39,6 @@ sub build_image {
 sub tag_image {
     my ($self, %arg) = @_;
     $self->_record('tag_image', %arg);
-    $self->locally_present->{ $arg{target} } = 1 if $arg{target};
     return 1;
 }
 
@@ -59,12 +52,6 @@ sub inspect_image {
     my ($self, $image_ref) = @_;
     $self->_record('inspect_image', image_ref => $image_ref);
     return { Id => $self->image_id_to_return };
-}
-
-sub image_exists_locally {
-    my ($self, $image_ref) = @_;
-    $self->_record('image_exists_locally', image_ref => $image_ref);
-    return $self->locally_present->{$image_ref} ? 1 : 0;
 }
 
 sub remote_tag_exists {

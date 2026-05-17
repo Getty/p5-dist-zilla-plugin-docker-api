@@ -1,4 +1,28 @@
 {{$NEXT}}
+  - Fix false "Source image '...' not found locally" failures during
+    `dzil release`. The release path used to call
+    `client->image_exists_locally($source)` as a pre-flight check; that
+    method wraps `images->inspect` in an `eval` and swallows ANY
+    exception (network blip, transient socket error, unrelated parse
+    issue) as "image is missing." If the swallowed error wasn't
+    actually a 404, the release aborted with a misleading message even
+    though the image was sitting in the daemon — we hit this on real
+    `raudssus/karr:latest` pushes. The pre-check is gone: the
+    subsequent `tag_image` call is the real verification, and its
+    Docker API error surfaces directly with a meaningful message.
+  - Promote `tag_image` failure from logged warning to `log_fatal`. A
+    failed tag in the release path used to be silently downgraded to
+    "Warning: failed to tag as ..." and then the push loop ran anyway,
+    pushing the wrong (or unchanged) image. Now it aborts the release.
+  - Skip the self-retag when the source ref is in the resolved tag
+    list (e.g. `latest` is both the source and a target tag). Previously
+    this caused a no-op `docker tag X X` per release.
+  - Fail the release if any `push_image` calls fail. Per-push errors
+    are still logged individually, but the release as a whole no
+    longer returns success when some tags failed to publish.
+  - Remove `Client->image_exists_locally` — it had a single caller
+    (the pre-check above) and the eval-swallow-exception pattern was
+    the root cause of the misleading "not found locally" errors.
 
 0.102     2026-05-17 15:56:39Z
   - Fix release push: every push failed against real registries with

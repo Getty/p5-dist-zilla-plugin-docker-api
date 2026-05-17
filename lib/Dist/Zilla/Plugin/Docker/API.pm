@@ -270,14 +270,9 @@ sub release {
         $self->log("Skipping 'latest' tag for trial release");
     }
 
-    # Source image: first tag from the build phase (same list, but resolved
+    # Source image: first tag from the build phase (same list, resolved
     # via the same template). Build must have happened before release.
     my $source_image_ref = $self->image . ':' . $self->tag_template->expand($self->tag->[0], %tmpl_vars);
-
-    # Verify it exists locally
-    unless ($self->client->image_exists_locally($source_image_ref)) {
-        $self->log_fatal("Source image '$source_image_ref' not found locally. Run 'dzil build' first.");
-    }
 
     # Check if tag exists on remote (if we're going to push)
     if ($self->release_push && $self->fail_if_tag_exists) {
@@ -289,20 +284,25 @@ sub release {
         }
     }
 
-    # Tag existing image with release tags
+    # Tag existing image with release tags. If the source image is missing
+    # (build never ran, or someone pruned the daemon), the underlying
+    # Docker API will return a real 404 — surface that as a fatal error
+    # instead of fabricating our own pre-check.
     my @image_refs = $self->_resolve_tags(\@tags, %tmpl_vars);
     for my $target_ref (@image_refs) {
+        next if $target_ref eq $source_image_ref;
         eval {
             $self->client->tag_image(source => $source_image_ref, target => $target_ref);
-            $self->log("Tagged: $target_ref");
         };
         if ($@) {
-            $self->log("Warning: failed to tag as $target_ref: $@");
+            $self->log_fatal("Failed to tag '$source_image_ref' as '$target_ref': $@");
         }
+        $self->log("Tagged: $target_ref");
     }
 
     # Push if enabled
     if ($self->release_push) {
+        my @failed;
         for my $image_ref (@image_refs) {
             $self->log("Pushing $image_ref...");
             eval {
@@ -310,7 +310,11 @@ sub release {
             };
             if ($@) {
                 $self->log("Warning: failed to push $image_ref: $@");
+                push @failed, $image_ref;
             }
+        }
+        if (@failed) {
+            $self->log_fatal("Push failed for: " . join(', ', @failed));
         }
     }
 }

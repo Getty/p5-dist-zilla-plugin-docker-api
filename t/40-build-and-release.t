@@ -87,16 +87,10 @@ subtest 'release tags and pushes existing built image' => sub {
 
     $p->release('Test-Dist-1.234.tar.gz');
 
-    my $exists = $rec->calls_of('image_exists_locally');
-    is(scalar @$exists, 1, 'image_exists_locally checked once');
-    is($exists->[0]{image_ref}, 'ghcr.io/example/my-app:latest',
-       'source image is first tag from build');
-
     my $tags = $rec->calls_of('tag_image');
-    is(scalar @$tags, 2, 'tag_image called once per tag');
+    is(scalar @$tags, 1, 'tag_image called once (source tag is skipped — no self-retag)');
     is($tags->[0]{source}, 'ghcr.io/example/my-app:latest', 'source tag');
-    is($tags->[0]{target}, 'ghcr.io/example/my-app:latest', 'first target tag');
-    is($tags->[1]{target}, 'ghcr.io/example/my-app:1.234',  'second target tag');
+    is($tags->[0]{target}, 'ghcr.io/example/my-app:1.234',  'target tag (the non-source one)');
 
     my $pushes = $rec->calls_of('push_image');
     is(scalar @$pushes, 2, 'push_image called once per tag');
@@ -113,7 +107,7 @@ subtest 'release_push = 0 tags but does not push' => sub {
 
     $p->release('Test-Dist-1.234.tar.gz');
 
-    is(scalar @{ $rec->calls_of('tag_image') },  2, 'still tagged');
+    is(scalar @{ $rec->calls_of('tag_image') },  1, 'still tagged (source self-tag skipped)');
     is(scalar @{ $rec->calls_of('push_image') }, 0, 'not pushed');
 };
 
