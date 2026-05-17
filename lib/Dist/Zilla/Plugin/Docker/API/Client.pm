@@ -1,6 +1,6 @@
 package Dist::Zilla::Plugin::Docker::API::Client;
 # ABSTRACT: Thin adapter around API::Docker
-our $VERSION = '0.102';
+our $VERSION = '0.103';
 use Moo;
 use Path::Tiny;
 use JSON::MaybeXS qw( decode_json );
