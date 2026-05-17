@@ -1,4 +1,4 @@
-{{$NEXT}}
+0.100     2026-05-17 01:23:05Z
 
   - Replace separate build_tag / release_tag with a single canonical `tag`
     attribute. The same list is applied at build (locally) and at release
