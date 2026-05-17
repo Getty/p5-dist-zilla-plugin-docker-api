@@ -1,6 +1,6 @@
 package Dist::Zilla::Plugin::Docker::API;
 # ABSTRACT: Build and publish Docker images as Dist::Zilla release artifacts
-our $VERSION = '0.004';
+our $VERSION = '0.101';
 use Moose;
 with 'Dist::Zilla::Role::Plugin';
 with 'Dist::Zilla::Role::AfterBuild';
