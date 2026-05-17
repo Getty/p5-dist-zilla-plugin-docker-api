@@ -1,12 +1,14 @@
 requires 'Dist::Zilla::Role::Plugin';
 requires 'Dist::Zilla::Role::AfterBuild';
 requires 'Dist::Zilla::Role::Releaser';
-requires 'API::Docker';
+requires 'API::Docker', '0.002';
 requires 'Moo';
 requires 'Types::Standard';
 requires 'Path::Tiny';
 requires 'Archive::Tar::Wrapper';
 requires 'Log::Any';
+requires 'JSON::MaybeXS';
+requires 'MIME::Base64';
 
 on test => sub {
     requires 'Test::More';

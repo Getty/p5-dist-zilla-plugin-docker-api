@@ -1,4 +1,18 @@
 {{$NEXT}}
+  - Fix release push: every push failed against real registries with
+    `Docker API error (400): missing X-Registry-Auth: invalid
+    X-Registry-Auth header: EOF`, because neither the plugin nor
+    API::Docker sent the header the Docker Engine demands. The plugin
+    now reads `~/.docker/config.json` (honouring `$DOCKER_CONFIG`),
+    matches the registry component of each pushed image ref against
+    the `auths` map (Docker Hub, ghcr.io, ECR, host:port, localhost,
+    identity-token entries), decodes the `auth` field, and passes
+    `{username,password,serveraddress}` (or `identitytoken`) through
+    to `images->push`. Requires API::Docker 0.002+ for the new `auth`
+    parameter.
+  - Auth lookup is exposed as `$client->auth_for_image_ref($ref)` so
+    bundles and tests can call into the same resolution path.
+  - cpanfile: add explicit deps on `JSON::MaybeXS` and `MIME::Base64`.
 
 0.101     2026-05-17 05:04:43Z
 

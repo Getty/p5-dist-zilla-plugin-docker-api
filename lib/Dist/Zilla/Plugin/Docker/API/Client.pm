@@ -3,6 +3,8 @@ package Dist::Zilla::Plugin::Docker::API::Client;
 our $VERSION = '0.102';
 use Moo;
 use Path::Tiny;
+use JSON::MaybeXS qw( decode_json );
+use MIME::Base64 qw( decode_base64 );
 
 use API::Docker;
 use Dist::Zilla::Plugin::Docker::API::Result;
@@ -23,6 +25,32 @@ has logger => (
 has logger_fatal => (
     is       => 'ro',
     required => 1,
+);
+
+has docker_config_path => (
+    is      => 'ro',
+    lazy    => 1,
+    builder => sub {
+        $ENV{DOCKER_CONFIG}
+            ? Path::Tiny::path($ENV{DOCKER_CONFIG}, 'config.json')
+            : Path::Tiny::path($ENV{HOME} // '', '.docker', 'config.json');
+    },
+);
+
+has _docker_config => (
+    is      => 'ro',
+    lazy    => 1,
+    builder => sub {
+        my ($self) = @_;
+        my $path = $self->docker_config_path;
+        return {} unless $path && -r "$path";
+        my $data = eval { decode_json(Path::Tiny::path($path)->slurp_utf8) };
+        if ($@ || !$data) {
+            $self->logger->("Warning: cannot parse $path: $@") if $@;
+            return {};
+        }
+        return $data;
+    },
 );
 
 sub build_image {
@@ -195,8 +223,10 @@ sub _push_tags {
             }
         };
 
+        my $auth = $self->auth_for_image_ref($tag);
+
         eval {
-            my $events = $docker->images->push($tag);
+            my $events = $docker->images->push($tag, auth => $auth);
             for my $event (@{$events // []}) {
                 $push_progress->($event);
                 if ($event->{aux} && $event->{aux}{Digest}) {
@@ -212,6 +242,79 @@ sub _push_tags {
             push @{ $$result_ref->{pushed} }, $tag;
         }
     }
+}
+
+sub auth_for_image_ref {
+    my ($self, $image_ref) = @_;
+    my $registry = $self->_registry_for_image_ref($image_ref);
+    return $self->_auth_for_registry($registry);
+}
+
+sub _registry_for_image_ref {
+    my ($self, $image_ref) = @_;
+
+    # Strip ":tag" or "@sha256:..." suffix from the image part.
+    my $name = $image_ref;
+    $name =~ s/\@sha256:.*$//;
+    my @parts = split m{/}, $name;
+
+    # If the first component does NOT look like a registry host
+    # (no dot, no colon, not "localhost"), it's an implicit Docker Hub repo.
+    if (@parts < 2 || ($parts[0] !~ /[.:]/ && $parts[0] ne 'localhost')) {
+        return 'https://index.docker.io/v1/';
+    }
+    return $parts[0];
+}
+
+sub _auth_for_registry {
+    my ($self, $registry) = @_;
+
+    my $config = $self->_docker_config;
+    my $auths = $config->{auths} // {};
+
+    my @candidates = ($registry);
+    if ($registry eq 'https://index.docker.io/v1/'
+        || $registry eq 'index.docker.io'
+        || $registry eq 'docker.io') {
+        push @candidates,
+            'https://index.docker.io/v1/',
+            'https://index.docker.io/v2/',
+            'index.docker.io',
+            'docker.io';
+    }
+
+    my $entry;
+    for my $key (@candidates) {
+        if (exists $auths->{$key}) {
+            $entry = $auths->{$key};
+            last;
+        }
+    }
+    return undef unless $entry;
+
+    my %auth = (serveraddress => $registry);
+
+    if ($entry->{identitytoken}) {
+        $auth{identitytoken} = $entry->{identitytoken};
+        return \%auth;
+    }
+
+    if ($entry->{auth}) {
+        my $decoded = eval { decode_base64($entry->{auth}) };
+        if (defined $decoded && $decoded =~ /^([^:]+):(.*)$/s) {
+            $auth{username} = $1;
+            $auth{password} = $2;
+            return \%auth;
+        }
+    }
+
+    if (defined $entry->{username} || defined $entry->{password}) {
+        $auth{username} = $entry->{username} if defined $entry->{username};
+        $auth{password} = $entry->{password} if defined $entry->{password};
+        return \%auth;
+    }
+
+    return undef;
 }
 
 sub tag_image {
@@ -230,9 +333,9 @@ sub push_image {
     my ($self, %arg) = @_;
 
     my $image_ref = $arg{image_ref};
-    my $auth = $arg{auth};
+    my $auth = exists $arg{auth} ? $arg{auth} : $self->auth_for_image_ref($image_ref);
 
-    my $events = $self->docker->images->push($image_ref);
+    my $events = $self->docker->images->push($image_ref, auth => $auth);
     for my $event (@{$events // []}) {
         if ($event->{errorDetail}) {
             $self->logger_fatal->("Push error: " . $event->{errorDetail}{message});
