@@ -55,7 +55,7 @@ subtest 'default attribute values' => sub {
     is($p->image,        'ghcr.io/example/my-app', 'image set');
     is($p->repository,   'ghcr.io/example/my-app', 'repository alias mirrors image');
     is($p->dockerfile,   'Dockerfile',             'default dockerfile');
-    is_deeply($p->tag,         ['latest', '%v'], 'default tag list');
+    is_deeply($p->tag,         ['latest', '%V', '%v'], 'default tag list');
     is_deeply($p->build_arg,   [], 'no build_args by default');
     is_deeply($p->label,       [], 'no labels by default');
     is_deeply($p->platform,    [], 'no platforms by default');

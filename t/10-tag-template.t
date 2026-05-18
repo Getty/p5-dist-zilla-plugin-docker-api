@@ -34,6 +34,21 @@ subtest 'composite templates' => sub {
     is($tmpl->expand('%n:%v', name => 'My-App', version => '1.234'), 'My-App:1.234');
 };
 
+subtest 'major version (%V / %vmaj)' => sub {
+    my $tmpl = Dist::Zilla::Plugin::Docker::API::TagTemplate->new(
+        zilla => undef,
+        plugin_name => 'Docker::API',
+    );
+
+    is($tmpl->expand('%V',    version => '0.402'),  '0',   '%V extracts leading int');
+    is($tmpl->expand('%V',    version => '1.234'),  '1',   '%V with 1.234');
+    is($tmpl->expand('%V',    version => '12.34'),  '12',  '%V with multi-digit major');
+    is($tmpl->expand('%V',    version => ''),       '',    '%V with empty version');
+    is($tmpl->expand('%V-x',  version => '0.402'),  '0-x', '%V composed with literal');
+    is($tmpl->expand('%vmaj', version => '0.402'),  '0',   '%vmaj alias still works');
+    is($tmpl->expand('%vmin', version => '0.402'),  '402', '%vmin still works');
+};
+
 subtest 'unknown variables' => sub {
     my $tmpl = Dist::Zilla::Plugin::Docker::API::TagTemplate->new(
         zilla => undef,

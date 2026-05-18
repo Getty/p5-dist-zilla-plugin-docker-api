@@ -69,7 +69,11 @@ subtest 'after_build hits client->build_image with resolved tags' => sub {
     my $b = $builds->[0];
     is_deeply(
         $b->{tags},
-        ['ghcr.io/example/my-app:latest', 'ghcr.io/example/my-app:1.234'],
+        [
+            'ghcr.io/example/my-app:latest',
+            'ghcr.io/example/my-app:1',
+            'ghcr.io/example/my-app:1.234',
+        ],
         'default tag list expands and prefixes image',
     );
     is($b->{dockerfile}, 'Dockerfile', 'dockerfile passed through');
@@ -88,14 +92,16 @@ subtest 'release tags and pushes existing built image' => sub {
     $p->release('Test-Dist-1.234.tar.gz');
 
     my $tags = $rec->calls_of('tag_image');
-    is(scalar @$tags, 1, 'tag_image called once (source tag is skipped — no self-retag)');
+    is(scalar @$tags, 2, 'tag_image called twice (source tag is skipped — no self-retag)');
     is($tags->[0]{source}, 'ghcr.io/example/my-app:latest', 'source tag');
-    is($tags->[0]{target}, 'ghcr.io/example/my-app:1.234',  'target tag (the non-source one)');
+    is($tags->[0]{target}, 'ghcr.io/example/my-app:1',      'first target (major)');
+    is($tags->[1]{target}, 'ghcr.io/example/my-app:1.234',  'second target (full version)');
 
     my $pushes = $rec->calls_of('push_image');
-    is(scalar @$pushes, 2, 'push_image called once per tag');
+    is(scalar @$pushes, 3, 'push_image called once per tag');
     is($pushes->[0]{image_ref}, 'ghcr.io/example/my-app:latest', 'pushed latest');
-    is($pushes->[1]{image_ref}, 'ghcr.io/example/my-app:1.234',  'pushed version');
+    is($pushes->[1]{image_ref}, 'ghcr.io/example/my-app:1',      'pushed major version');
+    is($pushes->[2]{image_ref}, 'ghcr.io/example/my-app:1.234',  'pushed full version');
 };
 
 subtest 'release_push = 0 tags but does not push' => sub {
@@ -107,7 +113,7 @@ subtest 'release_push = 0 tags but does not push' => sub {
 
     $p->release('Test-Dist-1.234.tar.gz');
 
-    is(scalar @{ $rec->calls_of('tag_image') },  1, 'still tagged (source self-tag skipped)');
+    is(scalar @{ $rec->calls_of('tag_image') },  2, 'still tagged (source self-tag skipped)');
     is(scalar @{ $rec->calls_of('push_image') }, 0, 'not pushed');
 };
 

@@ -46,7 +46,7 @@ has tag => (
     builder => '_build_tag_default',
 );
 
-sub _build_tag_default { ['latest', '%v'] }
+sub _build_tag_default { ['latest', '%V', '%v'] }
 
 has build_arg => (
     is      => 'ro',
@@ -472,6 +472,7 @@ __END__
     image = ghcr.io/example/my-app
 
     tag = latest
+    tag = %V
     tag = %v
 
     dockerfile = Dockerfile
@@ -483,7 +484,7 @@ Or via the L<@Author::GETTY|Dist::Zilla::PluginBundle::Author::GETTY> bundle:
 
     [@Author::GETTY::Docker / runtime]
     image = ghcr.io/example/my-app
-    tags  = latest %v
+    tags  = latest %V %v
 
 =head1 DESCRIPTION
 
@@ -508,7 +509,9 @@ image) and pushes if configured.
 =item C<image> - Full image repository (required). Example: C<ghcr.io/user/my-app>
 
 =item C<tag> - Tags applied to the image (can be repeated, template-enabled).
-Default: C<latest> and C<%v>. Applied identically in both build and release.
+Default: C<latest>, C<%V>, and C<%v> (e.g. C<latest>, C<0>, C<0.402>).
+Applied identically in both build and release. Note: setting C<tag>
+explicitly B<replaces> the default list, it does not append to it.
 
 =item C<dockerfile> - Dockerfile name (default: C<Dockerfile>)
 

@@ -52,7 +52,7 @@ sub docker_plugin {
 subtest 'default tag list' => sub {
     my $tzil = build_dist('');
     my $p = docker_plugin($tzil);
-    is_deeply($p->tag, ['latest', '%v'], 'default tag list is latest + %v');
+    is_deeply($p->tag, ['latest', '%V', '%v'], 'default tag list is latest + %V + %v');
 };
 
 subtest 'explicit tag wins' => sub {

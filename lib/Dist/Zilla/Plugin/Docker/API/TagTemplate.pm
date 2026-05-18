@@ -16,6 +16,7 @@ has plugin_name => (
 my %var_map = (
     n => 'name',
     v => 'version',
+    V => 'version_major',
     t => 'trial',
     g => 'git_short_sha',
     G => 'git_full_sha',
@@ -58,8 +59,7 @@ sub _expand_var {
     my $key = $var_map{$var} // $var;
     my $value = $vars{$key} // '';
 
-    # For version_major and version_minor, extract from version
-    if ($var eq 'vmaj' || $var eq 'vmin') {
+    if ($var eq 'V' || $var eq 'vmaj' || $var eq 'vmin') {
         my $version = $vars{version} // '';
         if ($version =~ /^(\d+)/) {
             $value = $1;
