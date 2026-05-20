@@ -1,4 +1,17 @@
 {{$NEXT}}
+  - New `build_verbose` attribute (default off). In its default
+    state the build log only echoes Dockerfile step headers —
+    "Step N/M : ..." from the legacy builder, "#N [N/M] ..." from
+    BuildKit — instead of every line the daemon streams back.
+    Set `build_verbose = 1` to get the full stream. Errors are
+    surfaced regardless.
+  - Strip trailing newlines from forwarded build-stream lines in
+    verbose mode. The Docker daemon's `stream` chunks end in `\n`
+    and the Dist::Zilla logger appends its own, so every original
+    line was followed by an empty `[plugin]` line in the output.
+    Now the same line-buffer used by concise mode is used in both
+    modes, so multi-line chunks are also split into one log entry
+    per line.
 
 0.103     2026-05-18 17:04:54Z
   - New `%V` tag template token: the major version extracted from

@@ -69,6 +69,7 @@ sub build_image {
     my $target = $arg{target};
     my $network_mode = $arg{network_mode};
     my $platform = $arg{platform};
+    my $verbose = $arg{verbose} // 0;
 
     my $docker = $self->docker;
 
@@ -90,16 +91,24 @@ sub build_image {
     my $image_id;
     my @processed_tags;
 
+    # Concise mode (default): only forward Dockerfile step headers — both the
+    # legacy builder ("Step N/M : ...") and BuildKit ("#N [N/M] ..."). Skip the
+    # noisy intermediate container chatter. Verbose mode forwards every line.
+    # The line buffer is used in both modes so the Dist::Zilla logger (which
+    # appends its own newline) doesn't get a stream chunk with a trailing \n.
+    my $line_buf = '';
     my $progress_cb = sub {
         my ($event) = @_;
         if ($event->{errorDetail}) {
             $self->logger_fatal->("Docker build error: " . $event->{errorDetail}{message});
         }
-        elsif ($event->{stream}) {
-            $self->logger->($event->{stream});
+        elsif (defined $event->{stream}) {
+            for my $line ($self->_extract_build_lines(\$line_buf, $event->{stream}, $verbose)) {
+                $self->logger->($line);
+            }
         }
         elsif ($event->{progress}) {
-            $self->logger->($event->{status} . ' ' . $event->{progress});
+            $self->logger->($event->{status} . ' ' . $event->{progress}) if $verbose;
         }
         if ($event->{aux} && $event->{aux}{ID}) {
             $image_id = $event->{aux}{ID};
@@ -159,6 +168,35 @@ sub build_image {
     }
 
     return $result;
+}
+
+sub _extract_build_lines {
+    my ($self, $buf_ref, $chunk, $verbose) = @_;
+    $$buf_ref .= $chunk;
+    my @out;
+    while ($$buf_ref =~ s/^([^\n]*)\n//) {
+        my $line = $1;
+        next unless length $line;
+        if ($verbose) {
+            push @out, $line;
+        }
+        elsif ($self->_is_build_step_header($line)) {
+            push @out, $line;
+        }
+    }
+    return @out;
+}
+
+sub _is_build_step_header {
+    my ($self, $line) = @_;
+    return 0 unless defined $line && length $line;
+    # Legacy builder: "Step 3/18 : RUN apt-get update"
+    return 1 if $line =~ m{^Step \s+ \d+/\d+ \s* :}x;
+    # BuildKit stage header: "#5 [4/12] RUN apt-get update"
+    return 1 if $line =~ m{^\#\d+ \s+ \[\d+/\d+\]}x;
+    # BuildKit named stage: "#7 [builder 3/8] COPY . ."
+    return 1 if $line =~ m{^\#\d+ \s+ \[[^\]]+ \s+ \d+/\d+\]}x;
+    return 0;
 }
 
 sub _create_tar {

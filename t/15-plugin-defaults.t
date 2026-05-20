@@ -71,6 +71,7 @@ subtest 'default attribute values' => sub {
     is($p->network_mode,        '', 'no network_mode by default');
     is($p->fail_if_tag_exists,   0, 'fail_if_tag_exists default off');
     is($p->skip_latest_on_trial, 1, 'skip_latest_on_trial default on');
+    is($p->build_verbose,        0, 'build_verbose default off');
 };
 
 subtest 'attribute overrides via dist.ini' => sub {

@@ -102,6 +102,15 @@ has release_load => (
     default => 0,
 );
 
+# When false (default), the build log only echoes Dockerfile step headers
+# (e.g. "Step 3/18 : RUN apt-get update" or BuildKit's "#5 [4/12] ..."),
+# not the per-command output. Set to true for the full stream.
+has build_verbose => (
+    is      => 'ro',
+    isa     => 'Bool',
+    default => 0,
+);
+
 has release_enabled => (
     is      => 'ro',
     isa     => 'Bool',
@@ -244,6 +253,7 @@ sub after_build {
         target       => $self->target,
         network_mode => $self->network_mode,
         platform     => $platforms[0],
+        verbose      => $self->build_verbose,
     );
 
     $self->_log_build_result($result);
@@ -520,6 +530,12 @@ explicitly B<replaces> the default list, it does not append to it.
 =item C<release_push> - Push to registry during release (default: true)
 
 =item C<release_load> - Load released image locally (default: false)
+
+=item C<build_verbose> - When false (default), the build log only echoes
+Dockerfile step headers — both the legacy builder format C<Step N/M : ...>
+and BuildKit's C<#N [N/M] ...> — instead of the full per-command output.
+Set to true to see every line the daemon streams back. Errors are always
+surfaced regardless of this flag.
 
 =item C<fail_if_tag_exists> - Error if tag already exists on remote
 
