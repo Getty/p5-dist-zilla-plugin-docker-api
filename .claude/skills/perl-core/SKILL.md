@@ -68,7 +68,9 @@ Why: bare subs hide what the call needs (`$gm` passed manually each time), can't
 
 ## JSON
 
-- **`JSON::MaybeXS`** always. When encoding, set `canonical => 1, convert_blessed => 1` on the encoder object.
+- **`JSON::MaybeXS`** always — never `JSON::PP`, `JSON::XS` or `Cpanel::JSON::XS` directly. Encoders get `canonical => 1, convert_blessed => 1`.
+- **Booleans: `JSON->true` / `JSON->false`.** `use JSON::MaybeXS;` covers both the codec and the booleans.
+- `$YAML::XS::Boolean = 'JSON::PP'` is one of YAML::XS's fixed mode names, not a module choice — leave it alone.
 
 ## DBIC-ish result classes
 
@@ -83,7 +85,28 @@ Why: bare subs hide what the call needs (`$gm` passed manually each time), can't
 - ❌ `default => sub { ... }` for a non-trivial Moose attribute default (use `lazy_build`)
 - ❌ 4-space indent in new Perl files
 - ❌ `File::Spec` in new code
+- ❌ `JSON::PP::true` / `JSON::PP::false` as barewords (use `JSON->true` / `JSON->false`)
 - ❌ `Data::Dumper` in shipped code (use `DDP` / `Data::Printer` for debug, strip before commit)
+
+## Changelog (the Changes file)
+
+Every Getty distribution ships a `Changes` file with a `{{$NEXT}}` token at
+the top (Dist::Zilla's `[NextRelease]` replaces it with the version number
+and timestamp at release time).
+
+- **Add a bullet under `{{$NEXT}}` in the SAME commit as any user-facing
+  change** — new bindings/functions, behaviour changes, bug fixes,
+  deprecations. If a `dzil`-built CPAN consumer would notice it, it belongs
+  in Changes. Don't leave it for "later"; later never comes and the release
+  ships an empty changelog.
+- **Match the existing entry style:** two-space indent, `  - ` bullets,
+  wrap around 78 columns, present-tense imperative ("New binding X",
+  "Fix Y on macOS").
+- **Skip pure dev-tooling noise** — skill hardlinks, editor config, internal
+  CI refactors that don't change install/test behaviour for users. (A CI fix
+  that *unbreaks* the build for everyone IS worth a line.)
+- **Never hand-edit the version line or its timestamp** — `[@Author::GETTY]`
+  / `[NextRelease]` own those. You only ever touch the `{{$NEXT}}` block.
 
 ## When in doubt
 
