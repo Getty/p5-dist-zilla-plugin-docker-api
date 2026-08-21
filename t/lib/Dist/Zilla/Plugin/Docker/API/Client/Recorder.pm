@@ -23,6 +23,16 @@ sub _record {
     push @{ $self->calls }, { method => $name, %args };
 }
 
+sub engine_info {
+    my ($self) = @_;
+    $self->_record('engine_info');
+    return {
+        version     => '0.0-fake',
+        api_version => '1.41',
+        engine      => 'Recorder Engine',
+    };
+}
+
 sub build_image {
     my ($self, %arg) = @_;
     $self->_record('build_image', %arg);

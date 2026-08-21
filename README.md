@@ -45,6 +45,36 @@ build-vs-release list.
 | `dzil build`   | Build image, apply every `tag`, load into local daemon (if `build_load=1`). No push. |
 | `dzil release` | Re-tag the already-built image with every `tag`, push (if `release_push=1`), load (if `release_load=1`). |
 
+## Container engine
+
+Builds and pushes go through [`API::Docker`](https://metacpan.org/pod/API::Docker),
+which speaks the Docker Engine HTTP API over a socket. No `docker` binary is
+involved at any point, so any engine serving that API will do and Docker itself
+need not be installed. Podman's rootless socket is a tested alternative:
+
+```bash
+systemctl --user enable --now podman.socket
+export DOCKER_HOST="unix://$XDG_RUNTIME_DIR/podman/podman.sock"
+```
+
+The socket is located from `DOCKER_HOST`, falling back to
+`/var/run/docker.sock` and nothing else — Docker contexts are *not* consulted,
+so a daemon picked with `docker context use` will not be found. `target`
+reaches the engine unchanged, so multi-stage builds behave the same either way.
+
+Since `after_build` builds an image unconditionally, the plugin verifies in
+`before_build` that an engine actually answers, and gives up there instead of
+after a whole distribution has been assembled:
+
+```
+[Docker::API] Docker::API engine ready: Podman Engine 5.4.2 (API 1.41)
+```
+
+| Variable | Effect |
+|---|---|
+| `DOCKER_HOST` | Socket or URL of the engine to talk to |
+| `DZIL_DOCKER_API_SKIP_PRECHECK=1` | Skip the startup check; an unreachable engine then only surfaces at image build time |
+
 ## Configuration
 
 ### Required

@@ -3,6 +3,7 @@ package Dist::Zilla::Plugin::Docker::API;
 our $VERSION = '0.104';
 use Moose;
 with 'Dist::Zilla::Role::Plugin';
+with 'Dist::Zilla::Role::BeforeBuild';
 with 'Dist::Zilla::Role::AfterBuild';
 with 'Dist::Zilla::Role::Releaser';
 
@@ -212,6 +213,43 @@ sub tag_template { shift->_tag_template }
 sub client { shift->_client }
 
 sub file { shift->dockerfile }
+
+# after_build builds an image unconditionally, so every dzil command that
+# builds needs a reachable engine. Ask for one up front instead of letting
+# Dist::Zilla gather, munge and write out a whole distribution first and only
+# then die on a socket that was never there.
+sub before_build {
+    my ($self) = @_;
+
+    return if $ENV{DZIL_DOCKER_API_SKIP_PRECHECK};
+
+    my $info = eval { $self->client->engine_info };
+    my $error = $@;
+
+    if ($error) {
+        # API::Docker croaks through Carp, so the reason arrives carrying one
+        # or more " at FILE line N." tails. Strip all of them (not just the
+        # last) and flatten to a single line -- log_fatal repeats whatever it
+        # is given, and a multi-line message gets repeated in full.
+        $error =~ s/\s+at\s+\S+\s+line\s+\d+\.?//g;
+        $error =~ s/\s+/ /g;
+        $error =~ s/^\s+|\s+$//g;
+
+        $self->log('Docker::API speaks the Docker Engine HTTP API over a '
+            .'socket and never shells out to the docker binary, so any engine '
+            .'serving that API will do.');
+        $self->log('Point DOCKER_HOST at one. For rootless Podman: '
+            .'systemctl --user enable --now podman.socket, then '
+            .'DOCKER_HOST="unix://$XDG_RUNTIME_DIR/podman/podman.sock"');
+        $self->log_fatal('cannot reach a container engine: '.$error
+            .' (set DZIL_DOCKER_API_SKIP_PRECHECK=1 to skip this check)');
+    }
+
+    $self->log('Docker::API engine ready: '
+        .($info->{engine} // 'unknown').' '
+        .($info->{version} // '?')
+        .' (API '.($info->{api_version} // '?').')');
+}
 
 sub after_build {
     my ($self, $arg) = @_;
@@ -511,6 +549,42 @@ the Dist::Zilla-built distribution.
 The same C<tag> list is used in both phases — C<dzil build> produces local tags
 for verification, C<dzil release> re-applies them (against the already-built
 image) and pushes if configured.
+
+=head1 CONTAINER ENGINE
+
+Builds and pushes go through L<API::Docker>, which speaks the Docker Engine
+HTTP API over a socket. No C<docker> binary is involved at any point, so any
+engine serving that API will do, and Docker itself need not be installed.
+Podman's rootless socket is a tested alternative:
+
+    systemctl --user enable --now podman.socket
+    export DOCKER_HOST="unix://$XDG_RUNTIME_DIR/podman/podman.sock"
+
+C<target> reaches the engine unchanged, so the multi-stage builds this plugin
+is usually pointed at behave the same either way.
+
+The socket is located from C<DOCKER_HOST>, falling back to
+C</var/run/docker.sock> and nothing else. Docker contexts are not consulted, so
+a daemon selected with C<docker context use> will not be picked up here; set
+C<DOCKER_HOST> in the environment C<dzil> runs in. See
+L<API::Docker/CONTAINER ENGINES> for how that compares to other clients.
+
+=head2 Startup precheck
+
+Because C<after_build> builds an image unconditionally, every C<dzil> command
+that builds needs a reachable engine. The plugin therefore asks the engine for
+its version in C<before_build>, before Dist::Zilla gathers a single file, and
+gives up there if nothing answers -- rather than letting a whole distribution
+be assembled and only then dying on a socket that was never there.
+
+On success the engine is named in the build log:
+
+    [Docker::API] Docker::API engine ready: Podman Engine 5.4.2 (API 1.41)
+
+Set C<DZIL_DOCKER_API_SKIP_PRECHECK=1> to skip the check and get the previous
+behaviour back, where an unreachable engine only surfaces once the build
+reaches the image. With several C<Docker::API> plugins in one F<dist.ini>,
+each runs its own precheck.
 
 =head1 CONFIGURATION
 

@@ -1,4 +1,18 @@
 {{$NEXT}}
+  - New startup precheck. `after_build` builds an image unconditionally,
+    so every `dzil` command that builds needs a reachable engine; the
+    plugin now asks for its version in `before_build` and gives up there
+    if nothing answers, instead of assembling a whole distribution first
+    and only then dying in `after_build`. On success the engine is named
+    in the build log ("engine ready: Podman Engine 5.4.2 (API 1.41)").
+    Set `DZIL_DOCKER_API_SKIP_PRECHECK=1` to skip the check and get the
+    old behaviour back.
+  - Document the container engine requirement: no `docker` binary is
+    needed at any point, any engine serving the Docker Engine HTTP API
+    will do, and Podman's rootless socket is a tested alternative.
+    `target` reaches the engine unchanged, so multi-stage builds behave
+    the same either way. Points at API::Docker's CONTAINER ENGINES
+    section for the socket discovery rules.
   - New `build_verbose` attribute (default off). In its default
     state the build log only echoes Dockerfile step headers —
     "Step N/M : ..." from the legacy builder, "#N [N/M] ..." from

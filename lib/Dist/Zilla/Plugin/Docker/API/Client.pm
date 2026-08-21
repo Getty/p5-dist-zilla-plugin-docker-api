@@ -2,6 +2,7 @@ package Dist::Zilla::Plugin::Docker::API::Client;
 # ABSTRACT: Thin adapter around API::Docker
 our $VERSION = '0.104';
 use Moo;
+use Carp qw( croak );
 use Path::Tiny;
 use JSON::MaybeXS qw( decode_json );
 use MIME::Base64 qw( decode_base64 );
@@ -52,6 +53,27 @@ has _docker_config => (
         return $data;
     },
 );
+
+# Cheapest round trip that proves an engine is actually listening on the
+# socket. Used by the plugin's before_build precheck, so a missing daemon
+# is reported before Dist::Zilla does any work rather than after.
+sub engine_info {
+    my ($self) = @_;
+
+    my $version = eval { $self->docker->system->version };
+    croak $@ if $@;
+    croak 'the engine returned no version information'
+        unless ref $version eq 'HASH';
+
+    my ($engine) = grep { ($_->{Name} // '') =~ /engine/i }
+        @{ $version->{Components} // [] };
+
+    return {
+        version     => $version->{Version},
+        api_version => $version->{ApiVersion},
+        engine      => $engine ? $engine->{Name} : undef,
+    };
+}
 
 sub build_image {
     my ($self, %arg) = @_;
