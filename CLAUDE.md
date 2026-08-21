@@ -28,7 +28,7 @@ for this distribution.
    conventions belong in this `CLAUDE.md` or in a skill, never in
    auto-memory.
 
-6. **Load the `perl-core` skill before editing any Perl** in this
+6. **Load the `getty-perl-core` skill before editing any Perl** in this
    workspace. It encodes Getty's house rules; the rules below are the
    TL;DR.
 
