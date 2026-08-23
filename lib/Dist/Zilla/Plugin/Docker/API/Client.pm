@@ -75,6 +75,25 @@ sub engine_info {
     };
 }
 
+# The engine's tag endpoint takes the repository and the tag as two separate
+# parameters (POST /images/{name}/tag?repo=&tag=), so a full image reference
+# has to be taken apart before it goes over the wire. Passing the whole thing
+# as `repo` leaves `tag` empty and the engine fills in its own default:
+# podman then rejects `example/app:1.0:latest` with a 500 and every version
+# tag is quietly lost. Splitting happens here rather than in API::Docker,
+# which mirrors the endpoint and should keep doing so.
+sub _split_image_ref {
+    my ( $self, $ref ) = @_;
+
+    my $colon = rindex $ref, ':';
+    return ( $ref, undef ) if $colon < 0;
+    # A colon before the last slash belongs to a registry host:port, not to a
+    # tag: registry.example.com:5000/team/app carries no tag at all.
+    return ( $ref, undef ) if rindex($ref, '/') > $colon;
+
+    return ( substr($ref, 0, $colon), substr($ref, $colon + 1) );
+}
+
 sub build_image {
     my ($self, %arg) = @_;
 
@@ -170,11 +189,16 @@ sub build_image {
 
     for my $tag (@tags) {
         next if $tag eq ($tags[0] // '');
+        my ( $repo, $tag_name ) = $self->_split_image_ref($tag);
         eval {
-            $docker->images->tag($image_id, repo => $tag);
+            $docker->images->tag($image_id,
+                repo => $repo,
+                defined $tag_name ? ( tag => $tag_name ) : (),
+            );
         };
         if ($@) {
             $self->logger->("Warning: failed to tag image as $tag: $@");
+            next;
         }
         push @processed_tags, $tag;
     }
@@ -383,9 +407,12 @@ sub tag_image {
     my $source = $arg{source};
     my $target = $arg{target};
 
+    my ( $repo, $tag ) = $self->_split_image_ref($target);
+
     $self->docker->images->tag(
         $source,
-        repo => $target,
+        repo => $repo,
+        defined $tag ? ( tag => $tag ) : (),
     );
 }
 

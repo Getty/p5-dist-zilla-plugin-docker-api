@@ -1,4 +1,19 @@
 {{$NEXT}}
+  - Fix every tag after the first one silently failing. The engine's tag
+    endpoint takes the repository and the tag as separate parameters;
+    the plugin handed it the whole image reference as `repo` and no
+    `tag`, so the engine appended its own default and podman rejected
+    `example/app:1.0:latest` with a 500. With the default tag list
+    (`latest`, `%V`, `%v`) only `latest` ever existed -- it is set by
+    the build itself and never goes through this path -- while both
+    version tags were lost on every build and release. References are
+    now split at the last colon that follows the last slash, so a
+    registry `host:port` is not mistaken for a tag separator.
+  - Stop reporting tags as applied when the engine refused them. The
+    tag was recorded as processed regardless of the outcome, so the
+    build log ended with "Tagged: app:1.0" for a tag that does not
+    exist, with the warning several lines further up. A refused tag is
+    now left out of the result.
   - New startup precheck. `after_build` builds an image unconditionally,
     so every `dzil` command that builds needs a reachable engine; the
     plugin now asks for its version in `before_build` and gives up there
