@@ -39,12 +39,19 @@ for this distribution.
 8. **`->instance` for `MooX::Singleton` / `MooseX::Singleton` classes.**
    `->new` for everything else.
 
-9. **Never copy `$VERSION` from a Getty-authored repo into a cpanfile.**
-   The repo version is the *next* unreleased version. Check
-   `cpanm --info` for the actual released version when pinning.
+9. **A Getty-authored dependency may be pinned to its next, unreleased
+   version.** This workspace tests its distributions together from their
+   working trees, so `cpanfile` is allowed to name a version that is not
+   on CPAN yet — `requires 'API::Docker', '0.003';` while CPAN is still
+   at 0.002 is deliberate, not a slip. Two things follow, and both are
+   binding: nothing is released before everything it depends on has been
+   released, and `cpanm --info Module::Name` is what tells you where CPAN
+   actually stands before you assume a pin is satisfiable for anyone
+   outside this machine.
 
-10. **Pin every Getty-authored dependency** to its latest released CPAN
-    version in `cpanfile`.
+10. **Pin every Getty-authored dependency** in `cpanfile` — to the
+    released version, or to the coming one when the change spans both
+    repos.
 
 11. **The version in `lib/Dist/Zilla/Plugin/Docker/API.pm` is the NEXT
     release.** What's currently on CPAN is the previous tag. `dzil

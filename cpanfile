@@ -1,7 +1,7 @@
 requires 'Dist::Zilla::Role::Plugin';
 requires 'Dist::Zilla::Role::AfterBuild';
 requires 'Dist::Zilla::Role::Releaser';
-requires 'API::Docker', '0.002';
+requires 'API::Docker', '0.003';
 requires 'Moo';
 requires 'Types::Standard';
 requires 'Path::Tiny';
