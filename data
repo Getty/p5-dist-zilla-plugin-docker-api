@@ -1,0 +1,17 @@
+---
+class: standard
+completed: 2026-08-25T00:51:43Z
+created: 2026-08-25T00:51:39Z
+id: 1
+priority: high
+started: 2026-08-25T00:51:43Z
+status: done
+tags:
+- cross-repo
+- build
+- escalated-from:API-Docker#12
+title: Log the build stream on a failed build
+updated: 2026-08-25T00:51:43Z
+---
+
+API::Docker 0.003 croaks on errorDetail before the progress loop runs, so a failed build logged nothing but the reason. Client.pm now drains $err->events through the progress filter before the fatal. Fixed in 91c0bda, covered by t/65-build-failure-stream.t.
