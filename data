@@ -1,0 +1,15 @@
+---
+class: standard
+completed: 2026-08-25T13:46:23Z
+created: 2026-08-25T05:47:30Z
+id: 2
+priority: medium
+started: 2026-08-25T13:46:23Z
+status: done
+title: Concise build log misses Podman's classic builder step headers
+updated: 2026-08-25T13:46:27Z
+---
+
+Seen live on the karr dzil build against rootless Podman 5.4.2: the build failed and the #12 replay logged nothing. _extract_build_lines keeps only ^Step \d+/\d+ \s*: (docker legacy) and BuildKit #N headers; Podman's classic builder emits 'STEP 1/8: FROM ...' (uppercase, colon directly attached), so concise mode drops every line - on success and on the failed-build replay alike. Verify against a real podman stream, then widen the match.
+
+Committed as 0265bd9; fixtures from a live rootless Podman 5.4.2 stream, replay verified live against a failing build.
