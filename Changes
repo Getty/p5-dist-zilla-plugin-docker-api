@@ -1,4 +1,12 @@
 {{$NEXT}}
+  - A failed build logs the build output again. API::Docker 0.003 croaks
+    on the engine's `errorDetail` event before the plugin's progress loop
+    runs, so from that version on a broken `RUN` step died with the
+    reason and nothing else -- the steps that led up to it, which the
+    plugin used to print, were gone. The exception carries the complete
+    event list (`$err->events`); the client now drains it through the
+    same progress filter as a live stream, so verbose and concise mode
+    behave as they do on success, and then dies as before.
   - Fix every tag after the first one silently failing. The engine's tag
     endpoint takes the repository and the tag as separate parameters;
     the plugin handed it the whole image reference as `repo` and no

@@ -183,8 +183,16 @@ sub build_image {
         }
     };
 
-    if ($@) {
-        $self->logger_fatal->("Docker build failed: $@");
+    if (my $err = $@) {
+        # API::Docker 0.003 croaks on the errorDetail event before the loop
+        # above gets to run, so the output that led up to the failure rides
+        # on the exception instead. Drain it from there, or a failed build
+        # logs nothing but the last line (api-docker #12). The error event
+        # itself is left out: the reason arrives through the fatal below.
+        if (ref $err && $err->can('events')) {
+            $progress_cb->($_) for grep { !$_->{errorDetail} } @{ $err->events };
+        }
+        $self->logger_fatal->("Docker build failed: $err");
     }
 
     for my $tag (@tags) {
