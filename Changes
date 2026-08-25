@@ -3,7 +3,13 @@
     headers ("STEP 3/18: RUN ..." - uppercase, colon attached), verified
     against a live rootless Podman 5.4.2 stream. Podman builds logged
     nothing in concise mode - neither live nor in the failed-build
-    replay of the entry below.
+    replay below.
+  - New DZIL_DOCKER_API_SKIP=1 skips the image build for one run: no
+    engine contact, no image, one loud log line per plugin. For local
+    dzil build/install/test while the image cannot build yet, e.g. while
+    a dependency the Dockerfile installs from CPAN is not released.
+    dzil release refuses to run with the variable set - a skipped build
+    phase means there is no image to tag and push.
   - A failed build logs the build output again. API::Docker 0.003 croaks
     on the engine's `errorDetail` event before the plugin's progress loop
     runs, so from that version on a broken `RUN` step died with the

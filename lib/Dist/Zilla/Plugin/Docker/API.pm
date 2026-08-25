@@ -222,6 +222,12 @@ sub file { shift->dockerfile }
 sub before_build {
     my ($self) = @_;
 
+    if ($ENV{DZIL_DOCKER_API_SKIP}) {
+        $self->log('DZIL_DOCKER_API_SKIP is set: skipping the image build '
+            .'for this run - no engine contact, no image');
+        return;
+    }
+
     return if $ENV{DZIL_DOCKER_API_SKIP_PRECHECK};
 
     my $info = eval { $self->client->engine_info };
@@ -254,6 +260,8 @@ sub before_build {
 
 sub after_build {
     my ($self, $arg) = @_;
+
+    return if $ENV{DZIL_DOCKER_API_SKIP};
 
     $self->log("Docker::API building image");
 
@@ -300,6 +308,12 @@ sub after_build {
 
 sub release {
     my ($self, $archive) = @_;
+
+    # A skipped build phase means there is no image to tag and push. Refusing
+    # here beats releasing a dist whose containers silently never shipped.
+    $self->log_fatal('DZIL_DOCKER_API_SKIP is set: refusing to release '
+        .'- the image build was skipped, there is nothing to push')
+        if $ENV{DZIL_DOCKER_API_SKIP};
 
     # Skip if release is disabled
     return unless $self->release_enabled;
@@ -586,6 +600,13 @@ Set C<DZIL_DOCKER_API_SKIP_PRECHECK=1> to skip the check and get the previous
 behaviour back, where an unreachable engine only surfaces once the build
 reaches the image. With several C<Docker::API> plugins in one F<dist.ini>,
 each runs its own precheck.
+
+Set C<DZIL_DOCKER_API_SKIP=1> to skip the image build entirely for one run --
+no engine contact, no image, one loud log line per plugin. This is for local
+C<dzil build> / C<dzil install> / C<dzil test> while the image cannot build
+yet, for example while a dependency pinned in the F<Dockerfile>'s C<cpanm>
+run is not released. C<dzil release> refuses to run with the variable set:
+a skipped build phase means there is no image to tag and push.
 
 =head1 CONFIGURATION
 
