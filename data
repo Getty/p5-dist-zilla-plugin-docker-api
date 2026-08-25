@@ -1,0 +1,15 @@
+---
+class: standard
+completed: 2026-08-25T13:46:32Z
+created: 2026-08-25T05:47:34Z
+id: 3
+priority: medium
+started: 2026-08-25T13:46:32Z
+status: done
+title: No way to skip the image build for a local dzil install
+updated: 2026-08-25T13:46:36Z
+---
+
+after_build builds unconditionally (documented), but mid-release-cycle the Dockerfile's cpanm --installdeps resolves from CPAN and must fail while the dep chain is unreleased (karr pins Git::Native 0.006 etc.). That makes dzil install/test/build of the consumer impossible locally until everything ships. Precheck has DZIL_DOCKER_API_SKIP_PRECHECK; the build itself has no escape hatch. Consider DZIL_DOCKER_API_SKIP=1 skipping before_build+after_build with a loud log line.
+
+Committed with DZIL_DOCKER_API_SKIP; release refuses with the variable set.
