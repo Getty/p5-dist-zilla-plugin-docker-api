@@ -246,6 +246,8 @@ sub _is_build_step_header {
     return 0 unless defined $line && length $line;
     # Legacy builder: "Step 3/18 : RUN apt-get update"
     return 1 if $line =~ m{^Step \s+ \d+/\d+ \s* :}x;
+    # Podman classic builder: "STEP 3/18: RUN apt-get update"
+    return 1 if $line =~ m{^STEP \s+ \d+/\d+ \s* :}x;
     # BuildKit stage header: "#5 [4/12] RUN apt-get update"
     return 1 if $line =~ m{^\#\d+ \s+ \[\d+/\d+\]}x;
     # BuildKit named stage: "#7 [builder 3/8] COPY . ."

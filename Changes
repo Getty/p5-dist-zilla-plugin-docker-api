@@ -1,4 +1,9 @@
 {{$NEXT}}
+  - Concise build logging now recognizes Podman's classic builder step
+    headers ("STEP 3/18: RUN ..." - uppercase, colon attached), verified
+    against a live rootless Podman 5.4.2 stream. Podman builds logged
+    nothing in concise mode - neither live nor in the failed-build
+    replay of the entry below.
   - A failed build logs the build output again. API::Docker 0.003 croaks
     on the engine's `errorDetail` event before the plugin's progress loop
     runs, so from that version on a broken `RUN` step died with the

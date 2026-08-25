@@ -15,6 +15,10 @@ my @headers = (
     '#5 [4/12] RUN apt-get update',
     '#7 [builder 3/8] COPY . .',
     '#23 [stage-2 1/4] WORKDIR /app',
+    # Podman classic builder: uppercase STEP, colon attached to the count.
+    # Captured from a live rootless Podman 5.4.2 build stream.
+    'STEP 1/2: FROM docker.io/library/perl:5.42',
+    'STEP 2/2: RUN exit 7',
 );
 
 # Lines that should be skipped (everything else from the build output).
@@ -29,6 +33,11 @@ my @noise = (
     'Reading package lists...',
     '#5 0.234 Hit:1 http://deb.debian.org/debian bookworm InRelease',
     'Sending build context to Docker daemon  2.048kB',
+    # Podman classic builder noise, from the same live stream.
+    'COMMIT',
+    '--> 5dd8b58474ea',
+    'marker-step-two',
+    'Successfully built 5dd8b58474ea',
     '',
 );
 

@@ -104,7 +104,8 @@ has release_load => (
 );
 
 # When false (default), the build log only echoes Dockerfile step headers
-# (e.g. "Step 3/18 : RUN apt-get update" or BuildKit's "#5 [4/12] ..."),
+# (e.g. "Step 3/18 : RUN apt-get update", Podman's "STEP 3/18: ..." or
+# BuildKit's "#5 [4/12] ..."),
 # not the per-command output. Set to true for the full stream.
 has build_verbose => (
     is      => 'ro',
@@ -606,8 +607,9 @@ explicitly B<replaces> the default list, it does not append to it.
 =item C<release_load> - Load released image locally (default: false)
 
 =item C<build_verbose> - When false (default), the build log only echoes
-Dockerfile step headers — both the legacy builder format C<Step N/M : ...>
-and BuildKit's C<#N [N/M] ...> — instead of the full per-command output.
+Dockerfile step headers — the legacy builder format C<Step N/M : ...>,
+Podman's classic builder C<STEP N/M: ...> and BuildKit's C<#N [N/M] ...> —
+instead of the full per-command output.
 Set to true to see every line the daemon streams back. Errors are always
 surfaced regardless of this flag.
 
