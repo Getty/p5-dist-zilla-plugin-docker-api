@@ -28,9 +28,10 @@ for this distribution.
    conventions belong in this `CLAUDE.md` or in a skill, never in
    auto-memory.
 
-6. **Load the `getty-perl-core` skill before editing any Perl** in this
-   workspace. It encodes Getty's house rules; the rules below are the
-   TL;DR.
+6. **Perl edits go to a `dzil-docker-*` agent**, which gets
+   `getty-perl-core` and the object-system skills force-loaded via
+   `briefing.skills`. If you are editing Perl without that briefing, load
+   `getty-perl-core` first. See Delegation below.
 
 7. **`use Module;` to load modules.** Only use `require` when there's a
    real runtime reason (lazy plugin loading, optional deps), not just to
@@ -72,34 +73,53 @@ to the `docker` CLI.
 ## Layout
 
 ```
-lib/Dist/Zilla/Plugin/Docker/API.pm           # main plugin
-lib/Dist/Zilla/Plugin/Docker/API/Client.pm    # API::Docker adapter
-lib/Dist/Zilla/Plugin/Docker/API/Result.pm    # build/push result object
-lib/Dist/Zilla/Plugin/Docker/API/TagTemplate.pm # %v / %g / %n expansion
-t/                                            # tests (prove -l t/)
+lib/Dist/Zilla/Plugin/Docker/API.pm           # main plugin (Moose)
+lib/Dist/Zilla/Plugin/Docker/API/Client.pm    # API::Docker adapter (Moo)
+lib/Dist/Zilla/Plugin/Docker/API/Result.pm    # build/push result object (Moo)
+lib/Dist/Zilla/Plugin/Docker/API/TagTemplate.pm # %-expansion (Moo)
+t/                                            # tests
+t/lib/                                        # Recorder / Unreachable client fakes
 ```
+
+`API.pm` is Moose because `Dist::Zilla::Role::Plugin` is; the three helper
+classes carry no Dist::Zilla dependency and stay Moo. That split is forced by
+the framework, not a slip — keep it on that line.
 
 ## Build and test
 
 ```bash
-dzil build          # build the dist
+prove -lr t/        # full suite, recursive; green with no container engine
+dzil build          # build the dist (no image — see below)
 dzil test           # full test suite
 prove -lv t/30-tag-attribute.t   # single test
 cpanm --installdeps .            # install deps from cpanfile
 ```
 
+This plugin is **not** applied to its own `dist.ini` (only `[@Author::GETTY]`),
+so `dzil build` here builds no image and runs no phase hook. Real plugin
+behavior is only ever verified through the test suite.
+
 ## API conventions
 
 - **Canonical tag attribute is `tag`** — multi-value, template-enabled,
-  defaults to `['latest', '%v']`. Same list is applied at build and at
-  release.
+  defaults to `['latest', '%V', '%v']`. Same list is applied at build and
+  at release, and setting it *replaces* the default rather than appending.
+- **`release` re-tags from `tag->[0]`, it does not rebuild.** Reordering
+  the list silently changes which image a release ships.
 - **`build_tag` and `release_tag` are deprecated.** They are funneled
   into `tag` by `BUILDARGS` with a deprecation warning. New code and
   new docs should never mention them outside the DEPRECATED section.
-- **`image` is the canonical repo name.** `repository` is a deprecated
-  alias kept for now.
-- **`build_load` / `release_push` are the canonical switches.**
-  `load` / `push` are deprecated aliases.
+- **`image` is the canonical repo name**, `build_load` / `release_push`
+  the canonical switches. `repository`, `load` and `push` are *documented*
+  as aliases but are lazy defaults reading **from** the canonical
+  attribute, so setting them in dist.ini changes nothing (karr #7). Only
+  `build_tag` / `release_tag` round-trip properly.
+- **The key a user writes is the `init_arg`, not the attribute name.**
+  `dockerfile` is spelled `file =` in dist.ini, and the POD currently says
+  otherwise (karr #5). Check `init_arg` before documenting an attribute.
+- **`mvp_multivalue_args` is the authority on repeatable keys.** A new
+  repeatable attribute missing from that list silently keeps only its
+  last value.
 - Underscore-prefixed `init_arg`s (`_target`, `_network_mode`) exist so
   the `@Author::GETTY::Docker` bundle can inject them without exposing
   them in user-facing dist.ini. `fail_if_tag_exists` and
@@ -109,10 +129,40 @@ cpanm --installdeps .            # install deps from cpanfile
 
 ## Testing notes
 
-- Tests use `Dist::Zilla::Tester::from_config` with an inline `dist.ini`.
+- Tests drive the real plugin through `Dist::Zilla::Tester->from_config`
+  with an inline `dist.ini`.
+- **`client_class` is the seam.** Phase tests set
+  `client_class = …::Client::Recorder` (in `t/lib`, reached via
+  `use lib "$Bin/lib"`), which records every call into `->calls`.
+  `…::Client::Unreachable` extends it and croaks from `engine_info` for the
+  precheck tests. A test that calls `->build` without setting it will reach
+  for a real engine.
+- `Client.pm`'s own helpers are below the seam and are tested by calling
+  them directly — a Recorder-driven test cannot see them.
 - `t/30-tag-attribute.t` uses `Test::Warnings` to assert deprecation
   warnings. Other test files use `local $SIG{__WARN__} = sub {}` to
   silence them.
+
+## Delegation
+
+Delegate behavior-relevant code to the right agent instead of touching it
+yourself — principle and lane are in `.claude/rules/dzil-docker-rules.md`.
+
+| Task | Agent |
+|---|---|
+| Implement / refactor / debug the plugin, the client adapter, cpanfile | `dzil-docker-worker` (default) |
+| Write/extend tests | `dzil-docker-test-writer` |
+| Pre-release audit | `dzil-docker-release-checker` |
+| POD and README | `dzil-docker-doc-writer` |
+
+What the Docker daemon itself accepts or answers is not this repo's question —
+it belongs to `../p5-api-docker`, as a ticket on that repo's board.
+
+The agents carry their skills via `briefing.skills` (see `.claude/agents/`);
+the main agent delegates rather than loading them. Skill sources live under
+`.claude/skills/`, architecture and invariants in `dzil-docker-core`.
+
+Work is tracked on this repo's `karr` board (`karr board`).
 
 ## When changing behavior
 
