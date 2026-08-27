@@ -2,6 +2,7 @@ package Dist::Zilla::Plugin::Docker::API::Client;
 # ABSTRACT: Thin adapter around API::Docker
 our $VERSION = '0.104';
 use Moo;
+use Archive::Tar;
 use Carp qw( croak );
 use Path::Tiny;
 use JSON::MaybeXS qw( decode_json );
@@ -106,7 +107,6 @@ sub build_image {
     my $nocache = $arg{nocache} // 0;
     my $rm = $arg{rm} // 1;
     my $forcerm = $arg{forcerm} // 1;
-    my $push = $arg{push} // 0;
     my $target = $arg{target};
     my $network_mode = $arg{network_mode};
     my $platform = $arg{platform};
@@ -211,17 +211,11 @@ sub build_image {
         push @processed_tags, $tag;
     }
 
-    my $result = Dist::Zilla::Plugin::Docker::API::Result->new(
+    return Dist::Zilla::Plugin::Docker::API::Result->new(
         image_id => $image_id,
         tags     => \@processed_tags,
         pushed   => [],
     );
-
-    if ($push && @tags) {
-        $self->_push_tags($docker, \@tags, \$result);
-    }
-
-    return $result;
 }
 
 sub _extract_build_lines {
@@ -257,11 +251,6 @@ sub _is_build_step_header {
 
 sub _create_tar {
     my ($self, $dir, $dockerfile) = @_;
-
-    eval { require Archive::Tar; };
-    if ($@) {
-        $self->logger_fatal->("Archive::Tar required for creating tar context: $@");
-    }
 
     my $root = Path::Tiny::path($dir);
     my @entries = $self->_collect_files($root, $root);
@@ -299,43 +288,6 @@ sub _collect_files {
         }
     }
     return @files;
-}
-
-sub _push_tags {
-    my ($self, $docker, $tags, $result_ref) = @_;
-
-    for my $tag (@$tags) {
-        $self->logger->("Pushing $tag...");
-
-        my $push_progress = sub {
-            my ($event) = @_;
-            if ($event->{errorDetail}) {
-                $self->logger_fatal->("Push error for $tag: " . $event->{errorDetail}{message});
-            }
-            elsif ($event->{progress}) {
-                $self->logger->($event->{status} . ' ' . $event->{progress});
-            }
-        };
-
-        my $auth = $self->auth_for_image_ref($tag);
-
-        eval {
-            my $events = $docker->images->push($tag, auth => $auth);
-            for my $event (@{$events // []}) {
-                $push_progress->($event);
-                if ($event->{aux} && $event->{aux}{Digest}) {
-                    $$result_ref->{digest} = $event->{aux}{Digest};
-                }
-            }
-        };
-
-        if ($@) {
-            $self->logger->("Warning: failed to push $tag: $@");
-        }
-        else {
-            push @{ $$result_ref->{pushed} }, $tag;
-        }
-    }
 }
 
 sub auth_for_image_ref {

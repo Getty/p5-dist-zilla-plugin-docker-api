@@ -22,19 +22,23 @@ has image => (
     init_arg => 'image',
 );
 
-# Backward compatibility alias
+# Deprecated reader; the constructor key is funneled into image by BUILDARGS.
 has repository => (
     is       => 'ro',
     isa      => 'Str',
     lazy     => 1,
+    init_arg => undef,
     default  => sub { shift->image },
 );
 
+# The dist.ini key is 'dockerfile'. 'file' is the deprecated spelling and is
+# funneled in by BUILDARGS -- it used to be the only one that worked, because
+# this attribute carried init_arg => 'file' while the POD documented
+# 'dockerfile'.
 has dockerfile => (
     is      => 'ro',
     isa     => 'Str',
     default => 'Dockerfile',
-    init_arg => 'file',
 );
 
 # Canonical tag attribute: one list, applied both at build (locally) and
@@ -74,12 +78,13 @@ has build_load => (
     default => 1,
 );
 
-# Deprecated alias
+# Deprecated reader; the constructor key is funneled into build_load.
 has load => (
-    is      => 'ro',
-    isa     => 'Bool',
-    lazy    => 1,
-    default => sub { shift->build_load },
+    is       => 'ro',
+    isa      => 'Bool',
+    lazy     => 1,
+    init_arg => undef,
+    default  => sub { shift->build_load },
 );
 
 # Release behavior
@@ -89,12 +94,13 @@ has release_push => (
     default => 1,
 );
 
-# Deprecated alias
+# Deprecated reader; the constructor key is funneled into release_push.
 has push => (
-    is      => 'ro',
-    isa     => 'Bool',
-    lazy    => 1,
-    default => sub { shift->release_push },
+    is       => 'ro',
+    isa      => 'Bool',
+    lazy     => 1,
+    init_arg => undef,
+    default  => sub { shift->release_push },
 );
 
 has release_load => (
@@ -495,9 +501,45 @@ sub _log_build_result {
     }
 }
 
+# Deprecated one-to-one spellings, old key => canonical key. These used to be
+# declared as lazy attributes reading *from* the canonical one, which meant
+# setting them in dist.ini changed nothing at all: 'load = 0' left build_load
+# at 1 and the code reads build_load. They are funneled here instead, like
+# build_tag/release_tag, so they actually take effect.
+my %DEPRECATED_KEY = (
+    file       => 'dockerfile',
+    load       => 'build_load',
+    push       => 'release_push',
+    repository => 'image',
+);
+
 around BUILDARGS => sub {
     my ($orig, $class, @args) = @_;
     my $args = $class->$orig(@args);
+
+    for my $old (sort keys %DEPRECATED_KEY) {
+        next unless exists $args->{$old};
+        my $new   = $DEPRECATED_KEY{$old};
+        my $value = delete $args->{$old};
+
+        if (exists $args->{$new}) {
+            warn "[Docker::API] '".$old."' is deprecated and '".$new
+               ."' is set explicitly; ignoring '".$old."'.\n";
+            next;
+        }
+
+        warn "[Docker::API] '".$old."' is deprecated; use '".$new."' instead.\n";
+        $args->{$new} = $value;
+    }
+
+    # 'phase' has no canonical counterpart -- the build and release phases are
+    # implicit now. Drop it with a warning rather than letting an unknown key
+    # be silently ignored.
+    if (exists $args->{phase}) {
+        delete $args->{phase};
+        warn "[Docker::API] 'phase' is deprecated and has no effect; "
+           ."the build and release phases are implicit.\n";
+    }
 
     my @legacy = grep { exists $args->{$_} } qw(build_tag release_tag);
     if (@legacy) {
@@ -523,11 +565,14 @@ around BUILDARGS => sub {
 
 sub mvp_multivalue_args { qw(tag build_tag release_tag build_arg label platform) }
 
+no Moose;
 __PACKAGE__->meta->make_immutable;
 
 1;
 
 __END__
+
+=encoding utf8
 
 =head1 SYNOPSIS
 
@@ -634,7 +679,10 @@ instead of the full per-command output.
 Set to true to see every line the daemon streams back. Errors are always
 surfaced regardless of this flag.
 
-=item C<fail_if_tag_exists> - Error if tag already exists on remote
+=item C<fail_if_tag_exists> - B<Not implemented yet.> The attribute is accepted
+and the release phase does consult it, but the underlying registry lookup
+(C<remote_tag_exists>) is a stub that always answers "no", so the check never
+fires. Do not rely on it to protect a tag.
 
 =item C<skip_latest_on_trial> - Skip C<latest> tag for trial releases
 
@@ -649,9 +697,18 @@ surfaced regardless of this flag.
 =head1 DEPRECATED
 
 The following names are still accepted but emit a warning and will be removed
-in a future release:
+in a future release. Each is funneled into its canonical attribute by
+C<BUILDARGS>; where both spellings are given, the canonical one wins and the
+collision is reported.
 
 =over 4
+
+=item C<file> - Use C<dockerfile> instead.
+
+Until 0.104 this was the only spelling that worked: the attribute carried
+C<< init_arg => 'file' >> while the documentation described C<dockerfile>, so
+C<dockerfile = ...> in a F<dist.ini> was silently ignored and the default
+F<Dockerfile> used instead. C<dockerfile> is now the canonical key.
 
 =item C<build_tag>, C<release_tag>
 
@@ -662,13 +719,19 @@ values are ignored.
 
 =item C<repository> - Use C<image> instead.
 
-=item C<phase> - No longer needed; build and release phases are implicit.
-
 =item C<push> - Use C<release_push> instead.
 
 =item C<load> - Use C<build_load> instead.
 
+=item C<phase> - No longer needed; build and release phases are implicit. It is
+accepted, warned about and discarded; it has no canonical counterpart.
+
 =back
+
+Note that C<repository>, C<push> and C<load> did B<not> work as aliases before
+0.104: they were declared as readers taking their value I<from> the canonical
+attribute, so setting one in a F<dist.ini> had no effect whatsoever. They are
+funneled properly now.
 
 =head1 SEE ALSO
 

@@ -76,7 +76,7 @@ subtest 'default attribute values' => sub {
 
 subtest 'attribute overrides via dist.ini' => sub {
     my $tzil = build_dist(<<'CFG');
-file = Dockerfile.multi
+dockerfile = Dockerfile.multi
 build_arg = DIST_NAME=%n
 label = org.opencontainers.image.title=%n
 platform = linux/amd64

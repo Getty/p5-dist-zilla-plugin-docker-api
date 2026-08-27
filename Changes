@@ -1,4 +1,26 @@
 {{$NEXT}}
+  - "dockerfile = ..." in a dist.ini now takes effect. The attribute
+    carried init_arg => 'file' while the POD, the README and the
+    [Author::GETTY::Docker] bundle all used "dockerfile", so that key was
+    silently dropped and every build used the default Dockerfile. If you
+    worked around this with "file = ...", it still works and now warns.
+  - The deprecated names repository, push and load work as aliases. They
+    were declared as readers taking their value from the canonical
+    attribute, so "load = 0" left build_load at 1 and changed nothing.
+    They are funneled through BUILDARGS now, like build_tag/release_tag,
+    and the canonical name wins when both are given.
+  - "phase" is warned about and discarded instead of being silently
+    ignored as an unknown key.
+  - fail_if_tag_exists is documented as not implemented. It is consulted
+    during release, but remote_tag_exists is a stub returning a constant
+    "no", so the check never fires. Implementing it needs a registry
+    lookup that API::Docker does not expose yet.
+  - cpanfile declares Moose, Dist::Zilla::Role::BeforeBuild,
+    namespace::autoclean, Carp, Archive::Tar and Test::Warnings, all of
+    which were loaded but undeclared. Archive::Tar::Wrapper is dropped -
+    nothing used it - and Archive::Tar is loaded at compile time instead
+    of through a runtime require.
+  - Add "=encoding utf8", without which the POD failed podchecker.
   - Concise build logging now recognizes Podman's classic builder step
     headers ("STEP 3/18: RUN ..." - uppercase, colon attached), verified
     against a live rootless Podman 5.4.2 stream. Podman builds logged

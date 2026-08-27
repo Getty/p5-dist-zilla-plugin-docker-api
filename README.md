@@ -148,9 +148,13 @@ label = org.opencontainers.image.version=%v
 ### Tag-exists check and trials
 
 ```ini
-fail_if_tag_exists   = 1     # error out if a target tag already exists on the registry
+fail_if_tag_exists   = 1     # NOT IMPLEMENTED YET - see below
 skip_latest_on_trial = 1     # omit `latest` for trial releases (default: 1)
 ```
+
+`fail_if_tag_exists` is accepted and consulted during release, but the registry
+lookup behind it is still a stub that always answers "no", so the check never
+fires. Do not rely on it to protect an existing tag.
 
 ### Registry auth
 
