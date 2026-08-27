@@ -1,0 +1,30 @@
+---
+class: standard
+completed: 2026-08-27T04:06:55Z
+created: 2026-08-27T03:51:10Z
+id: 8
+priority: low
+started: 2026-08-27T04:06:55Z
+status: done
+tags:
+- cleanup
+title: Dead push branch in Client::build_image writes past Result read-only attributes
+updated: 2026-08-27T04:06:55Z
+---
+
+build_image accepts a "push" option and calls _push_tags when set, but the
+plugin never passes it - release() does its own tagging and pushing. The branch
+is unreachable in production.
+
+Worse, _push_tags mutates the Result object through its hash:
+
+  $$result_ref->{digest} = ...
+  push @{ $$result_ref->{pushed} }, $tag;
+
+Result declares digest and pushed as is => ro with Types::Standard constraints;
+writing through the hash bypasses both. If the branch is ever reached, it works
+by accident.
+
+Remove the branch and _push_tags, or route it through a proper constructor.
+
+Fixed: the push argument, the if (push && tags) branch and _push_tags are removed from Client::build_image. build_image now returns the Result directly. Nothing called it - release() does its own tagging and pushing through push_image.
