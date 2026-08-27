@@ -109,14 +109,20 @@ behavior is only ever verified through the test suite.
 - **`build_tag` and `release_tag` are deprecated.** They are funneled
   into `tag` by `BUILDARGS` with a deprecation warning. New code and
   new docs should never mention them outside the DEPRECATED section.
-- **`image` is the canonical repo name**, `build_load` / `release_push`
-  the canonical switches. `repository`, `load` and `push` are *documented*
-  as aliases but are lazy defaults reading **from** the canonical
-  attribute, so setting them in dist.ini changes nothing (karr #7). Only
-  `build_tag` / `release_tag` round-trip properly.
-- **The key a user writes is the `init_arg`, not the attribute name.**
-  `dockerfile` is spelled `file =` in dist.ini, and the POD currently says
-  otherwise (karr #5). Check `init_arg` before documenting an attribute.
+- **`image` is the canonical repo name**, `dockerfile` the Dockerfile key,
+  `build_load` / `release_push` the switches. Every deprecated spelling
+  (`file`, `repository`, `load`, `push`, `build_tag`, `release_tag`) is
+  resolved in `BUILDARGS` and warns; the canonical key wins on collision.
+  `phase` has no counterpart and is discarded with a warning.
+- **An alias is only real if `BUILDARGS` resolves it.** Declaring one as a
+  lazy attribute reading *from* the canonical value does nothing at all —
+  that bug shipped in `repository`, `load` and `push`. The deprecated
+  readers carry `init_arg => undef` so the old keys cannot bypass the
+  table.
+- **The key a user writes is the `init_arg`, not the attribute name**, and
+  an unknown dist.ini key is discarded without an error. `dockerfile`
+  shipped documented-but-unaccepted for exactly that reason. Check
+  `init_arg` before documenting an attribute.
 - **`mvp_multivalue_args` is the authority on repeatable keys.** A new
   repeatable attribute missing from that list silently keeps only its
   last value.

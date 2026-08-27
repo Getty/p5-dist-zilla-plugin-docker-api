@@ -51,11 +51,8 @@ Two environment escapes, and they are not the same:
 is applied identically in both phases. Setting it in dist.ini **replaces** the
 default list, never appends.
 
-Three traps live in the `init_arg`s:
+Two traps live in the `init_arg`s:
 
-- **`dockerfile` is spelled `file` in dist.ini** (`init_arg => 'file'`). The
-  attribute, the reader and the POD all say "dockerfile"; the user writes
-  `file = Dockerfile.multi`. `t/15-plugin-defaults.t` is the proof.
 - **`_target` and `_network_mode`** are underscore-prefixed so the
   `@Author::GETTY::Docker` bundle can inject them without exposing them in
   user-facing dist.ini. `fail_if_tag_exists` and `skip_latest_on_trial`
@@ -65,9 +62,14 @@ Three traps live in the `init_arg`s:
   (`tag build_tag release_tag build_arg label platform`). A new repeatable
   attribute that is not in that list silently keeps only its last value.
 
-Only `build_tag`/`release_tag` are real aliases — `BUILDARGS` merges them into
-`tag` with a deprecation warning. See "Known holes" for the ones that only look
-like aliases.
+**Every deprecated spelling is resolved in `BUILDARGS`, nowhere else.**
+`build_tag`/`release_tag` merge into `tag`; the `%DEPRECATED_KEY` table maps
+`file → dockerfile`, `load → build_load`, `push → release_push`,
+`repository → image`; `phase` is warned about and discarded. The canonical key
+wins on collision and the collision is reported. The deprecated readers
+(`->repository`, `->load`, `->push`, `->file`) carry `init_arg => undef` so the
+old keys cannot reach an attribute directly and bypass the table — keep it that
+way when adding one. `t/35-deprecated-aliases.t` pins all of it down.
 
 ## Release re-tags from `tag->[0]`
 
@@ -168,13 +170,8 @@ Consequences worth stating before writing a test:
 ## Known holes — ticketed, do not fix in passing
 
 - **`remote_tag_exists` returns a hard `0`**, so `fail_if_tag_exists` never
-  fires despite being documented as a feature.
-- **`repository`, `push` and `load` are not aliases.** They are lazy defaults
-  reading *from* the canonical attribute, so setting `load = 0` in dist.ini
-  leaves `build_load` at 1 and changes nothing. Only `build_tag`/`release_tag`
-  round-trip properly.
-- **`Client::build_image`'s `push` branch is dead** — the plugin never passes
-  it — and `_push_tags` writes through the `Result` object's hash directly,
-  past its read-only attributes.
-- **`API.pm` ends without `no Moose;`** before `make_immutable`, against the
-  house convention.
+  fires. Both the POD and `README.md` now say so explicitly, so this is a
+  documented no-op rather than a broken promise. Implementing it needs a
+  *registry* lookup — `GET /distribution/{name}/json` — which `API::Docker`
+  does not expose; that is filed on its board, and this repo's karr #6 is
+  blocked on it. Do not try to answer the question from the local daemon.

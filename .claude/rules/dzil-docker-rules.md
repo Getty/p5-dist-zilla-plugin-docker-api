@@ -98,16 +98,19 @@ creating unless the user names a specific item to handle.
   `unix:///run/user/1000/podman/podman.sock`. `/var/run/docker.sock` does not exist, and
   that is the only fallback the plugin has, so anything live needs `DOCKER_HOST` set
   explicitly.
-- **Four documented-but-broken behaviors are known and ticketed.** `fail_if_tag_exists`
-  never fires (`remote_tag_exists` returns a hard `0`); `repository`, `push` and `load`
-  read *from* the canonical attributes instead of feeding them, so setting them in
-  dist.ini changes nothing; `Client::build_image`'s `push` branch is dead code that
-  writes past `Result`'s read-only attributes; `API.pm` lacks `no Moose;`. Do not
-  rediscover them as new findings and do not fix them opportunistically inside an
-  unrelated change.
-- **`dockerfile` is spelled `file` in dist.ini** and the POD says otherwise. Before
-  documenting or changing any attribute, read its `init_arg` — that is the key users
-  write, and this distribution's whole user surface is dist.ini keys.
+- **`fail_if_tag_exists` is a documented no-op** — `remote_tag_exists` returns a hard
+  `0`, so the check never fires. The POD and `README.md` say so. Implementing it needs
+  a registry endpoint `API::Docker` does not have (karr #6, blocked). Do not
+  rediscover it as a new finding, and do not try to answer it from the local daemon.
+- **An unknown dist.ini key is silently discarded, not rejected.** That is how
+  `dockerfile = ...` went unnoticed for so long: the attribute carried
+  `init_arg => 'file'`, so the documented key fell through to the default with no
+  error. Before documenting or changing any attribute, read its `init_arg` — that is
+  the key users write, and this distribution's whole user surface is dist.ini keys.
+- **Deprecated spellings live in `BUILDARGS` only.** The `%DEPRECATED_KEY` table plus
+  `init_arg => undef` on the deprecated readers is what makes them work at all; an
+  alias declared as a lazy attribute reading *from* the canonical one silently does
+  nothing, which is exactly what `repository`, `push` and `load` used to do.
 - **`release` re-tags from `tag->[0]`, it does not rebuild.** Reordering the `tag` list
   silently changes which image a release ships. Anything touching the tag list is a
   release-behavior change.

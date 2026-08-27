@@ -51,8 +51,9 @@ only if you observed it.
 
 POD lives next to the code (`=attr`, `=method`, `=head1`), woven by `@Author::GETTY`.
 Touch a user-facing attribute, touch its POD and the `CONFIGURATION` list in the same
-change — and remember the POD currently documents `dockerfile =` where dist.ini takes
-`file =`.
+change — and check the `init_arg`, because that is the key users actually write. An
+unknown dist.ini key is discarded without an error, so a mismatch between the two is
+invisible until someone notices their setting did nothing.
 
 ## Verification
 

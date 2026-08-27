@@ -22,9 +22,11 @@ This is a plugin: almost every reader arrives to answer "what do I write in my
 `dist.ini`?". That makes one thing decisive.
 
 - **Document the key the parser accepts, which is the `init_arg`, not the attribute
-  name.** They differ today: the attribute is `dockerfile`, dist.ini takes `file =`, and
-  both the SYNOPSIS and the `CONFIGURATION` list say `dockerfile`. Anything with an
-  explicit `init_arg` needs the same check.
+  name.** An unknown dist.ini key is discarded without an error, so documenting the
+  wrong one produces silence, not a complaint. This already shipped once: `dockerfile`
+  was documented while the attribute carried `init_arg => 'file'`, and every reader who
+  followed the docs got the default Dockerfile. Check any attribute with an explicit
+  `init_arg` against what you write.
 - **Underscore-prefixed attributes are not user-facing.** `_target` and `_network_mode`
   exist for the `@Author::GETTY::Docker` bundle to inject; they stay out of the
   configuration list. `fail_if_tag_exists` and `skip_latest_on_trial` are deliberately
@@ -35,13 +37,14 @@ This is a plugin: almost every reader arrives to answer "what do I write in my
   `latest`, `%V`, `%v`, and setting it replaces the list rather than appending — that
   sentence has to survive every edit.
 - **The `DEPRECATED` section is where the old names live and the only place they appear.**
-  `build_tag`, `release_tag`, `repository`, `phase`, `push`, `load`. Do not mention them
-  in `CONFIGURATION`, the SYNOPSIS or `README.md`. Where a documented alias does not
-  actually work — setting `load` leaves `build_load` untouched — say what is true or
-  report it; do not describe intent as capability.
+  `file`, `build_tag`, `release_tag`, `repository`, `phase`, `push`, `load`. Do not
+  mention them in `CONFIGURATION`, the SYNOPSIS or `README.md`. All of them are resolved
+  in `BUILDARGS` and warn; `phase` alone has no canonical counterpart and is simply
+  discarded. Say what each one maps to.
 - **A documented feature that is not implemented is a finding, not prose to polish.**
-  `fail_if_tag_exists` is listed as behavior while `remote_tag_exists` returns a hard
-  `0`.
+  `fail_if_tag_exists` is the standing example — it is consulted during release but
+  `remote_tag_exists` always answers "no", and both the POD and `README.md` label it as
+  not implemented. Keep that label until the label stops being true.
 
 The `CONTAINER ENGINE` section is a promise about behavior: builds go through the Engine
 HTTP API over a socket, no `docker` binary is involved, `DOCKER_HOST` and
