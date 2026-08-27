@@ -1,0 +1,34 @@
+---
+class: standard
+completed: 2026-08-27T04:06:23Z
+created: 2026-08-27T03:50:39Z
+id: 4
+priority: high
+started: 2026-08-27T04:06:23Z
+status: done
+tags:
+- cpanfile
+- release
+title: cpanfile does not match what the code loads
+updated: 2026-08-27T04:06:23Z
+---
+
+Runtime deps declared in cpanfile diverge from lib/ in both directions.
+
+Loaded but undeclared:
+  Moose                              API.pm (the plugin class itself)
+  Dist::Zilla::Role::BeforeBuild     API.pm, composed for the engine precheck
+  namespace::autoclean               API.pm
+  Carp                               Client.pm
+
+Declared but never loaded:
+  Archive::Tar::Wrapper              nothing uses it; _create_tar in Client.pm
+                                     does a runtime require of Archive::Tar
+
+Moo is correctly declared and used by Client/Result/TagTemplate. Note the mixed
+object system is deliberate: Dist::Zilla::Role::Plugin forces Moose on API.pm,
+the three helper classes carry no Dist::Zilla dependency and stay Moo.
+
+A naive "^use" scan misses Archive::Tar because it is a lazy require.
+
+Fixed: cpanfile now declares Moose, Dist::Zilla::Role::BeforeBuild, namespace::autoclean, Carp, Archive::Tar and Test::Warnings; Archive::Tar::Wrapper dropped. The lazy require of Archive::Tar in _create_tar was hoisted to a top-level use (house rule: require is not a lazy optimization). List sorted alphabetically.
