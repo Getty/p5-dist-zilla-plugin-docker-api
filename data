@@ -1,0 +1,54 @@
+---
+claimed_at: 2026-08-27T14:40:15Z
+claimed_by: main
+class: standard
+completed: 2026-08-27T14:40:15Z
+created: 2026-08-27T03:50:48Z
+id: 6
+priority: medium
+started: 2026-08-27T12:28:00Z
+status: done
+tags:
+- behavior
+- pod
+title: fail_if_tag_exists never fires - remote_tag_exists returns a hard 0
+updated: 2026-08-27T14:40:15Z
+---
+
+Client::remote_tag_exists is a stub that returns 0 unconditionally, so the
+fail_if_tag_exists check in release() can never trigger. The POD lists it under
+CONFIGURATION as working behavior ("Error if tag already exists on remote").
+
+The Recorder fake in t/lib returns 0 as well, so no test can catch the gap.
+
+Either implement the registry query or document the attribute as not yet
+implemented. Shipping it as a promise is the one option to avoid.
+
+Documented as not implemented for now, in both the POD and README.md - a user reading either no longer believes the tag is protected. Implementation is NOT done and stays open.
+
+Why it is not a quick fix: the check needs to ask a *registry*, not the local daemon. The engine route for that is GET /distribution/{name}/json, and API::Docker exposes no such resource class (it has images, containers, networks, volumes, system, exec). So this needs the endpoint added in ../p5-api-docker first, then remote_tag_exists wired to it here, then a Recorder case that can return both answers. Filed on that repo's board.
+
+2026-08-27, from the API::Docker side: the endpoint this ticket waits on now
+exists. API::Docker 0.004 (unreleased) adds
+
+  $docker->distribution->exists($image_ref, auth => $auth)   # 1 / 0 / croak
+  $docker->distribution->inspect($image_ref, auth => $auth)  # descriptor
+
+exists is meant for remote_tag_exists and is callable without an eval. It
+croaks rather than answering "no" when the engine has no /distribution route
+-- which rootless Podman does not, measured -- so replacing the hard 0 with it
+turns "cannot check" into a loud failure instead of a silent false. Decide
+whether fail_if_tag_exists should treat that croak as fatal or as a warning.
+
+Auth is optional: no auth argument means an anonymous lookup, which is what a
+public image needs. Do not land before API::Docker 0.004 is released.
+
+2026-08-27: implemented, API::Docker 0.004 (installed locally, not yet on CPAN - cpanfile pin raised to 0.004 per rule 9).
+
+Client::remote_tag_exists now asks distribution->exists with the credential from auth_for_image_ref, omitting the auth option entirely when none resolves (anonymous lookup, what a public image needs). The 'cannot ask this engine' croak is deliberately not caught there.
+
+Maintainer's decision on the open question: an engine that cannot answer is FATAL, not a warning. release() distinguishes the two cases - "Tag X already exists on remote registry (ref)" vs "fail_if_tag_exists is set, but this engine cannot answer whether 'ref' ... : <engine text> - set fail_if_tag_exists = 0 to release without the check". Rationale: the default is 0, so whoever turns it on asked for the tag to be protected; downgrading an unanswerable check to a silent 'does not exist' is the bug this ticket describes. Practical consequence, measured: on this machine's rootless Podman every release with fail_if_tag_exists = 1 now stops. Documented in both POD and README, not as a footnote.
+
+Tests: t/52-fail-if-tag-exists.t (exists / croak / not-exists / not consulted when off) and t/56-client-registry-internals.t (auth key omitted rather than passed as undef). Mutation-verified by the orchestrator: degrading the fatal to a log() turns t/52 subtest 2 red, passing auth => undef unconditionally turns t/56 subtest 1 red. lib/ restored and md5-verified afterwards.
+
+POD and README no longer say 'not implemented'.
