@@ -1,0 +1,29 @@
+---
+class: standard
+completed: 2026-08-27T04:06:31Z
+created: 2026-08-27T03:50:44Z
+id: 5
+priority: high
+started: 2026-08-27T04:06:31Z
+status: done
+tags:
+- pod
+- user-facing
+title: POD documents dockerfile = but dist.ini takes file =
+updated: 2026-08-27T04:06:31Z
+---
+
+The attribute is named dockerfile but declares init_arg => file, so the key a
+user writes in dist.ini is "file". Both the SYNOPSIS and the CONFIGURATION list
+in lib/Dist/Zilla/Plugin/Docker/API.pm document "dockerfile", which the config
+parser does not accept.
+
+t/15-plugin-defaults.t confirms the real key: it overrides with "file = Dockerfile.multi".
+
+Decide which side moves. Dropping init_arg makes the docs correct but breaks any
+dist.ini already using "file ="; keeping it means the docs and README must say
+"file". Check ../p5-dist-zilla-pluginbundle-author-getty first - the
+@Author::GETTY::Docker bundle constructs this plugin programmatically and may
+pass one of the two names.
+
+Fixed: init_arg => 'file' removed, so dockerfile is now the key dist.ini accepts. Verified empirically first - 'dockerfile = X' was silently dropped and fell back to the default, no error. The [Author::GETTY::Docker] bundle passes 'dockerfile' too, so that path was broken as well and is repaired by this change without touching the bundle. 'file' kept as a warning alias via BUILDARGS. t/15 switched to the canonical key.
