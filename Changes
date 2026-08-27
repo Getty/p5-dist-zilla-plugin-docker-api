@@ -11,10 +11,41 @@
     and the canonical name wins when both are given.
   - "phase" is warned about and discarded instead of being silently
     ignored as an unknown key.
-  - fail_if_tag_exists is documented as not implemented. It is consulted
-    during release, but remote_tag_exists is a stub returning a constant
-    "no", so the check never fires. Implementing it needs a registry
-    lookup that API::Docker does not expose yet.
+  - fail_if_tag_exists works. remote_tag_exists was a stub returning a
+    constant "no", so the check never fired and a release happily
+    overwrote a published tag; it now asks the registry through
+    API::Docker 0.004's distribution->exists (GET
+    /distribution/{name}/json), with the credentials resolved for the
+    reference or anonymously when there are none.
+  - An engine that cannot answer that question stops the release instead
+    of passing it. Rootless Podman 5.4.2 (API 1.41) serves no
+    /distribution route at all -- measured: it answers 404 "Path
+    /v1.41/distribution/nginx:latest/json is not supported" for every
+    reference -- and reading that as "the tag is free" is the bug this
+    replaces. With fail_if_tag_exists = 1 (the default is 0) such an
+    engine is now a fatal error naming the engine's own message, before
+    anything is tagged or pushed. Set fail_if_tag_exists = 0 to release
+    without the check.
+  - New registry credential pre-flight. A bad or expired credential used
+    to surface only when the push failed, after Dist::Zilla had written
+    the distribution and the image had been built and tagged. The
+    credentials that would be pushed with are now handed to the engine's
+    POST /auth (API::Docker 0.004's system->auth) in before_build, which
+    is early enough because Dist::Zilla sets DZIL_RELEASING before it
+    calls build_archive -- so the check runs only during a release, and a
+    plain dzil build never needs registry credentials. No credential
+    found for the registry is not a failure: an anonymous push is a legal
+    thing to attempt, and the engine is not contacted at all. A failed
+    check is fatal. Its message does not claim the credential was
+    rejected: Podman answers both a rejected credential and an
+    unreachable registry with 500 (measured: a bogus localhost registry
+    gives 500 "... dial tcp ... connect: connection refused"), so the
+    status cannot tell them apart and the engine's own text is carried
+    through instead.
+  - DZIL_DOCKER_API_SKIP_PRECHECK=1 now skips the registry credential
+    check as well as the engine version probe.
+  - cpanfile requires API::Docker 0.004, which is where
+    distribution->exists and system->auth come from.
   - cpanfile declares Moose, Dist::Zilla::Role::BeforeBuild,
     namespace::autoclean, Carp, Archive::Tar and Test::Warnings, all of
     which were loaded but undeclared. Archive::Tar::Wrapper is dropped -

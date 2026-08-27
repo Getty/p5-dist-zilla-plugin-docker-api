@@ -221,6 +221,20 @@ sub client { shift->_client }
 
 sub file { shift->dockerfile }
 
+# API::Docker croaks through Carp, so a reason arrives carrying one or more
+# " at FILE line N." tails. Strip all of them (not just the last) and flatten
+# to a single line -- log_fatal repeats whatever it is given, and a
+# multi-line message gets repeated in full.
+sub _flatten_error {
+    my ($self, $error) = @_;
+
+    $error = '' unless defined $error;
+    $error =~ s/\s+at\s+\S+\s+line\s+\d+\.?//g;
+    $error =~ s/\s+/ /g;
+    $error =~ s/^\s+|\s+$//g;
+    return $error;
+}
+
 # after_build builds an image unconditionally, so every dzil command that
 # builds needs a reachable engine. Ask for one up front instead of letting
 # Dist::Zilla gather, munge and write out a whole distribution first and only
@@ -240,13 +254,7 @@ sub before_build {
     my $error = $@;
 
     if ($error) {
-        # API::Docker croaks through Carp, so the reason arrives carrying one
-        # or more " at FILE line N." tails. Strip all of them (not just the
-        # last) and flatten to a single line -- log_fatal repeats whatever it
-        # is given, and a multi-line message gets repeated in full.
-        $error =~ s/\s+at\s+\S+\s+line\s+\d+\.?//g;
-        $error =~ s/\s+/ /g;
-        $error =~ s/^\s+|\s+$//g;
+        $error = $self->_flatten_error($error);
 
         $self->log('Docker::API speaks the Docker Engine HTTP API over a '
             .'socket and never shells out to the docker binary, so any engine '
@@ -262,6 +270,51 @@ sub before_build {
         .($info->{engine} // 'unknown').' '
         .($info->{version} // '?')
         .' (API '.($info->{api_version} // '?').')');
+
+    $self->_precheck_registry_auth
+        if $ENV{DZIL_RELEASING} && $self->release_enabled && $self->release_push;
+}
+
+# A rejected or expired registry credential otherwise surfaces only when the
+# push fails -- after Dist::Zilla gathered and wrote the distribution and
+# after_build built and tagged the image, i.e. after the damage. This runs
+# before any of it.
+#
+# The phase hook that runs early enough is before_build, and it can tell a
+# release from a plain build: Dist::Zilla::Dist::Builder::release sets
+# DZIL_RELEASING before it calls build_archive, so the variable is already
+# there when this hook runs (measured against Dist::Zilla 6.037). A plain
+# dzil build never sets it and so never needs registry credentials.
+#
+# Only the registry host of `image` decides which credential applies, and
+# that part carries no template variables, so no expansion is needed here.
+sub _precheck_registry_auth {
+    my ($self) = @_;
+
+    my $image_ref = $self->image;
+
+    my $status = eval { $self->client->verify_auth_for_image_ref($image_ref) };
+    my $error = $@;
+
+    # Deliberately not worded as "rejected": the engine answers a bad
+    # credential and an unreachable registry with the same failure -- Podman
+    # returns 500 for both, so the status cannot tell them apart. The engine's
+    # own text, which does, is carried through verbatim.
+    if ($error) {
+        $self->log_fatal('the registry credential check for '.$image_ref
+            .' failed: '.$self->_flatten_error($error)
+            .' (set DZIL_DOCKER_API_SKIP_PRECHECK=1 to skip this check)');
+    }
+
+    # No credential found for that registry. An anonymous push is a legal
+    # thing to attempt, so this is a note, not a failure.
+    unless (defined $status) {
+        $self->log('Docker::API: no registry credentials found for '
+            .$image_ref.' - the release push will be anonymous');
+        return;
+    }
+
+    $self->log('Docker::API registry credentials accepted for '.$image_ref);
 }
 
 sub after_build {
@@ -343,12 +396,30 @@ sub release {
     # via the same template). Build must have happened before release.
     my $source_image_ref = $self->image . ':' . $self->tag_template->expand($self->tag->[0], %tmpl_vars);
 
-    # Check if tag exists on remote (if we're going to push)
+    # Check if the tag exists on the remote (if we're going to push), before
+    # anything is tagged or pushed.
+    #
+    # "This engine cannot answer" is fatal here, not a warning. Whoever sets
+    # fail_if_tag_exists asked for the tag to be protected; downgrading an
+    # unanswerable check to a silent "does not exist" is exactly the bug this
+    # replaces. An engine without a /distribution route -- rootless Podman --
+    # therefore stops the release and says so.
     if ($self->release_push && $self->fail_if_tag_exists) {
         for my $tag (@tags) {
             my $image_ref = $self->_image_ref($tag, %tmpl_vars);
-            if ($self->client->remote_tag_exists($image_ref)) {
-                $self->log_fatal("Tag '$tag' already exists on remote registry");
+            my $exists = eval { $self->client->remote_tag_exists($image_ref) };
+            my $error = $@;
+
+            if ($error) {
+                $self->log_fatal('fail_if_tag_exists is set, but this engine '
+                    ."cannot answer whether '$image_ref' already exists on the "
+                    .'remote registry: '.$self->_flatten_error($error)
+                    .' - set fail_if_tag_exists = 0 to release without the check');
+            }
+
+            if ($exists) {
+                $self->log_fatal("Tag '$tag' already exists on remote registry"
+                    ." ($image_ref)");
             }
         }
     }
@@ -646,12 +717,64 @@ behaviour back, where an unreachable engine only surfaces once the build
 reaches the image. With several C<Docker::API> plugins in one F<dist.ini>,
 each runs its own precheck.
 
+When C<before_build> runs as part of C<dzil release> (Dist::Zilla sets
+C<DZIL_RELEASING> before it calls C<build_archive>, which is early enough to
+tell a release from a plain build) and both C<release_enabled> and
+C<release_push> are true, the same hook also pre-flights the registry
+credential the eventual push would use -- resolved as described in
+L</"Registry credentials"> below -- and hands it to the engine's
+C<POST /auth> (C<< system->auth >>) before anything is built. A plain
+C<dzil build> never triggers this and needs no registry credentials at all.
+No credential resolved for the registry is not a failure -- an anonymous push
+is a legal thing to attempt, so nothing is checked and nothing fails. A
+failed check is fatal, before the build starts, and its message says only
+that the check failed, not that the credential was rejected: Podman answers
+a rejected credential and an unreachable registry with the same C<500>, so
+the two cannot be told apart from the status alone, and the engine's own
+text is included instead.
+
+C<DZIL_DOCKER_API_SKIP_PRECHECK=1> skips this credential check along with the
+engine version probe above.
+
 Set C<DZIL_DOCKER_API_SKIP=1> to skip the image build entirely for one run --
 no engine contact, no image, one loud log line per plugin. This is for local
 C<dzil build> / C<dzil install> / C<dzil test> while the image cannot build
 yet, for example while a dependency pinned in the F<Dockerfile>'s C<cpanm>
 run is not released. C<dzil release> refuses to run with the variable set:
 a skipped build phase means there is no image to tag and push.
+
+=head2 Registry credentials
+
+The release push, the C<fail_if_tag_exists> lookup and the registry
+credential precheck above all resolve a credential for an image reference
+the same way, through C<auth_for_image_ref>: the C<auths> block of
+F<config.json> in the directory named by C<DOCKER_CONFIG>, or
+F<~/.docker/config.json> when that is unset. Nothing else is read --
+C<REGISTRY_AUTH_FILE> and Podman's own
+F<$XDG_RUNTIME_DIR/containers/auth.json> are not consulted, regardless of
+which engine is at the other end of C<DOCKER_HOST>.
+
+Within the matching registry's entry, the first of these present wins: an
+C<identitytoken>; a base64 C<auth> field decoded to C<username:password>;
+plain C<username> / C<password> fields. Docker Hub is matched under any of
+C<https://index.docker.io/v1/> and C<v2/>, C<index.docker.io> or
+C<docker.io>. A C<credsStore> or C<credHelpers> entry that delegates the
+secret to an external helper is not supported -- nothing in this plugin
+reads either key, so such a registry resolves to no credential and any
+request against it goes out anonymous rather than failing.
+
+C<docker login> is the usual way to populate the file. C<podman login>
+writes to its own auth file instead
+(F<$XDG_RUNTIME_DIR/containers/auth.json> by default, overridable with
+C<REGISTRY_AUTH_FILE>), which this plugin never reads; point it at the file
+that is read instead:
+
+    podman login --authfile ~/.docker/config.json registry.example.com
+
+Finding no credential for a registry is never an error by itself in this
+plugin -- both C<fail_if_tag_exists> and the release push treat it as "go
+anonymous," and only a credential that C<auth_for_image_ref> did find and
+the engine then rejects (or an unreachable registry -- see above) is fatal.
 
 =head1 CONFIGURATION
 
@@ -679,10 +802,19 @@ instead of the full per-command output.
 Set to true to see every line the daemon streams back. Errors are always
 surfaced regardless of this flag.
 
-=item C<fail_if_tag_exists> - B<Not implemented yet.> The attribute is accepted
-and the release phase does consult it, but the underlying registry lookup
-(C<remote_tag_exists>) is a stub that always answers "no", so the check never
-fires. Do not rely on it to protect a tag.
+=item C<fail_if_tag_exists> - Abort the release if any tag already exists on
+the remote registry (default: false). The check runs before anything is
+tagged or pushed, and only when C<release_push> is also true. It asks the
+I<registry>, not the local daemon, through C<API::Docker>'s
+C<< distribution->exists >> (C<GET /distribution/{name}/json>), using the
+credential resolved for C<image> (see L</"Registry credentials">), or an
+anonymous request when none applies.
+
+An engine that has no C</distribution> route -- rootless Podman among them --
+cannot answer the question at all, and that is treated as a release-stopping
+failure rather than as "the tag is free": the release aborts with the
+engine's own error and a reminder that C<fail_if_tag_exists = 0> releases
+without the check.
 
 =item C<skip_latest_on_trial> - Skip C<latest> tag for trial releases
 

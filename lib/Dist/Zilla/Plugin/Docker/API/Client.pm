@@ -398,10 +398,42 @@ sub inspect_image {
     return $self->docker->images->inspect($image_ref);
 }
 
+# Ask the *registry* whether a reference is already published, through the
+# engine's GET /distribution/{name}/json. Credentials are optional: without
+# any, the lookup is anonymous, which is what a public image needs.
+#
+# API::Docker's exists() croaks instead of answering "no" when the engine has
+# no /distribution route -- rootless Podman has none, measured -- and that
+# croak is deliberately not caught here. "This engine cannot answer" is not
+# the same as "the tag is free", and only the caller can decide what to do
+# about the difference.
 sub remote_tag_exists {
     my ($self, $image_ref) = @_;
 
-    return 0;
+    my $auth = $self->auth_for_image_ref($image_ref);
+
+    return $self->docker->distribution->exists(
+        $image_ref,
+        defined $auth ? ( auth => $auth ) : (),
+    ) ? 1 : 0;
+}
+
+# Pre-flight for the release push: hand the engine, through POST /auth, the
+# very credentials push_image would use for this reference and let the
+# registry judge them. A rejected credential croaks; the caller is meant to
+# make that fatal before anything is built.
+#
+# Returns undef when no credential could be resolved for the reference. That
+# is not a failure -- an anonymous push to a public registry is a legal thing
+# to do, and system->auth croaks on an empty AuthConfig, so there would be
+# nothing to ask about.
+sub verify_auth_for_image_ref {
+    my ($self, $image_ref) = @_;
+
+    my $auth = $self->auth_for_image_ref($image_ref);
+    return undef unless $auth;
+
+    return $self->docker->system->auth(auth => $auth);
 }
 
 1;

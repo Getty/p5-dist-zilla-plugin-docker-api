@@ -70,10 +70,23 @@ after a whole distribution has been assembled:
 [Docker::API] Docker::API engine ready: Podman Engine 5.4.2 (API 1.41)
 ```
 
+During `dzil release` (when `release_enabled` and `release_push` are both
+true), the same `before_build` hook also pre-flights the registry credential
+the push would use — handed to the engine's `POST /auth` before anything is
+built, so an expired or rejected login is caught before the image is built
+and tagged, not after. A plain `dzil build` never triggers this. No
+credential resolved for the registry is not a failure — an anonymous push is
+legal, so nothing is checked. A failed check is fatal, and its message says
+only that the check failed, not that the credential was rejected: Podman
+answers a rejected credential and an unreachable registry with the same
+`500`, so the two can't be told apart from the status, and the engine's own
+text is included instead.
+
 | Variable | Effect |
 |---|---|
 | `DOCKER_HOST` | Socket or URL of the engine to talk to |
-| `DZIL_DOCKER_API_SKIP_PRECHECK=1` | Skip the startup check; an unreachable engine then only surfaces at image build time |
+| `DZIL_DOCKER_API_SKIP_PRECHECK=1` | Skip both the engine version probe and the release registry-credential check; an unreachable engine or a bad credential then only surfaces once the build (or push) reaches it |
+| `DZIL_DOCKER_API_SKIP=1` | Skip the image build entirely for one run — no engine contact, no image. `dzil release` refuses to run with this set |
 
 ## Configuration
 
@@ -83,7 +96,9 @@ after a whole distribution has been assembled:
 
 ### Tags
 
-`tag` is multi-value and template-enabled. Default is `latest` plus `%v`.
+`tag` is multi-value and template-enabled. Default is `latest`, `%V` and `%v`
+(three tags). Setting `tag` yourself **replaces** that list, it does not add
+to it.
 
 ```ini
 tag = latest
@@ -98,6 +113,9 @@ Available template variables:
 |----------|-----------------------------------|------------------|
 | `%n`     | Distribution name                 | `My-App`         |
 | `%v`     | Distribution version              | `1.234`          |
+| `%V`     | Major version (leading digits)    | `1`              |
+| `%vmaj`  | Same as `%V`                      | `1`              |
+| `%vmin`  | Minor version (second field)      | `234`            |
 | `%t`     | Trial suffix                      | `-TRIAL` or empty|
 | `%g`     | Short git SHA (7 chars)           | `a1b2c3d`        |
 | `%G`     | Full git SHA (40 chars)           | `a1b2c3d4e5f6...`|
@@ -148,20 +166,55 @@ label = org.opencontainers.image.version=%v
 ### Tag-exists check and trials
 
 ```ini
-fail_if_tag_exists   = 1     # NOT IMPLEMENTED YET - see below
+fail_if_tag_exists   = 0     # abort the release if any tag already exists remotely (default: 0)
 skip_latest_on_trial = 1     # omit `latest` for trial releases (default: 1)
 ```
 
-`fail_if_tag_exists` is accepted and consulted during release, but the registry
-lookup behind it is still a stub that always answers "no", so the check never
-fires. Do not rely on it to protect an existing tag.
+`fail_if_tag_exists` asks the *registry*, not the local daemon, whether each
+tag already exists — through `API::Docker`'s `distribution->exists`
+(`GET /distribution/{name}/json`), using the credential resolved for `image`
+or an anonymous request when none applies. The check runs before anything is
+tagged or pushed, and only when `release_push` is also on.
+
+An engine with no `/distribution` route — rootless Podman among them — can't
+answer that question at all, and that is treated as a release-stopping
+failure rather than as "the tag is free": the release aborts with the
+engine's own error and a reminder that `fail_if_tag_exists = 0` releases
+without the check. Turning the switch on against such an engine means every
+release fails until it's turned back off.
 
 ### Registry auth
 
-The plugin uses the Docker daemon's configured registries:
+Credentials are read from the Docker CLI's config file — `config.json` in the
+directory named by `DOCKER_CONFIG`, or `~/.docker/config.json` when that is
+unset. Only the `auths` block is consulted, and for the matching registry
+entry, in this order: an `identitytoken`, a base64 `auth` field
+(`username:password`), or plain `username` / `password` fields. For Docker
+Hub the usual spellings (`https://index.docker.io/v1/` and `/v2/`,
+`index.docker.io`, `docker.io`) are all tried.
 
-- Run `docker login` for your registry, or
-- Set `DOCKER_AUTH_CONFIG` with a JSON config.
+So `docker login` is the way to set this up — but check what it actually
+wrote. Podman is a separate case: `podman login` writes to its own auth file
+(`$XDG_RUNTIME_DIR/containers/auth.json` by default, `REGISTRY_AUTH_FILE`
+overrides it), which this plugin does not read. Point it at the file that is
+read instead:
+
+```bash
+podman login --authfile ~/.docker/config.json ghcr.io
+```
+
+A `credsStore` or `credHelpers` entry
+delegating the secret to an external helper is **not** supported: the
+`auths` entry is then empty, no credential is found, and the push is
+attempted anonymously. The release precheck says so out loud before
+building:
+
+```
+[Docker::API] Docker::API: no registry credentials found for ghcr.io/user/my-app - the release push will be anonymous
+```
+
+There is no `DOCKER_AUTH_CONFIG` support — that variable is read nowhere in
+this plugin.
 
 ## Use via `@Author::GETTY`
 
