@@ -1,0 +1,23 @@
+---
+class: standard
+completed: 2026-08-27T04:07:03Z
+created: 2026-08-27T03:51:13Z
+id: 9
+priority: low
+started: 2026-08-27T04:07:03Z
+status: done
+tags:
+- style
+title: API.pm is missing no Moose; before make_immutable
+updated: 2026-08-27T04:07:03Z
+---
+
+House convention (getty-perl-core): every Moose class ends with "no Moose;"
+followed by __PACKAGE__->meta->make_immutable.
+
+lib/Dist/Zilla/Plugin/Docker/API.pm has make_immutable but no "no Moose;". It
+does load namespace::autoclean, which cleans the imported sugar, so this is
+convention rather than a live bug - but it is the only Moose class in the dist
+and should read like one.
+
+Fixed: 'no Moose;' added before make_immutable in API.pm. Also added the missing '=encoding utf8' - the POD failed podchecker before, which would have blocked a release.
