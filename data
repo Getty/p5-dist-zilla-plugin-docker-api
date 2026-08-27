@@ -1,0 +1,36 @@
+---
+class: standard
+completed: 2026-08-27T04:06:47Z
+created: 2026-08-27T03:51:06Z
+id: 7
+priority: medium
+started: 2026-08-27T04:06:47Z
+status: done
+tags:
+- behavior
+- deprecation
+title: Deprecated aliases repository, push and load do not work
+updated: 2026-08-27T04:06:47Z
+---
+
+Three of the five deprecated names are lazy defaults that read FROM the
+canonical attribute instead of feeding INTO it:
+
+  has repository => ( lazy, default => sub { shift->image } );
+  has push       => ( lazy, default => sub { shift->release_push } );
+  has load       => ( lazy, default => sub { shift->build_load } );
+
+Setting "load = 0" in dist.ini therefore sets the load attribute to 0 and leaves
+build_load at 1 - and the code reads build_load. The setting is silently ignored.
+"repository = x" without "image" fails outright, because image is required.
+
+Only build_tag and release_tag are real aliases: BUILDARGS merges them into tag
+and warns.
+
+t/15-plugin-defaults.t only asserts the image -> repository direction, which is
+why this passes today.
+
+Fix in BUILDARGS alongside build_tag/release_tag, with the same deprecation
+warning, and add the reverse-direction assertions.
+
+Fixed: file, load, push and repository are funneled through BUILDARGS via a %DEPRECATED_KEY table, with init_arg => undef on the readers so the old keys cannot bypass it. Canonical key wins on collision and the collision is reported. 'phase' has no counterpart, so it is warned about and discarded instead of silently ignored. New regression test t/35-deprecated-aliases.t covers all four plus the collision and the reader mirrors.
