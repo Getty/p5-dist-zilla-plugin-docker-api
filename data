@@ -1,0 +1,59 @@
+---
+claimed_at: 2026-08-27T14:40:35Z
+claimed_by: main
+class: standard
+completed: 2026-08-27T14:40:35Z
+created: 2026-08-27T04:25:47Z
+id: 10
+priority: low
+started: 2026-08-27T12:28:05Z
+status: done
+tags:
+- release
+- registry
+title: Pre-flight check the registry credentials before a release push
+updated: 2026-08-27T14:40:35Z
+---
+
+release() builds and tags, then pushes. A bad or expired credential surfaces
+only when the push fails - after the image is built, tagged and the release
+is half done.
+
+auth_for_image_ref already resolves the credential out of the docker config
+for a given image reference, so the missing half is a way to ask the
+registry whether it is any good. That is POST /auth, which API::Docker does
+not expose yet (its karr #17, filed).
+
+When it lands: consult it in before_build alongside the engine precheck, but
+only when release_push is on and the phase is actually a release - a plain
+dzil build must not need registry credentials.
+
+Blocked on API::Docker #17.
+
+2026-08-27, from the API::Docker side: API::Docker 0.004 (unreleased) adds
+
+  $docker->system->auth(auth => $auth)   # the same auth images->push takes
+  $docker->system->auth(username => ..., password => ..., serveraddress => ...)
+
+Returns {Status => "Login Succeeded", ...}; a rejected credential croaks, so
+the pre-flight is a bare call before the build-and-tag work. Both spellings
+are accepted, and the first one lets the plugin hand over exactly what it was
+going to push with.
+
+Measured caveat for the error handling: Podman answers a failed check with 500,
+not Docker 401. Test the croak, not the status. response => \%res is available
+if the plugin wants to distinguish "rejected" from "registry unreachable".
+
+Do not land before API::Docker 0.004 is released.
+
+2026-08-27: implemented, API::Docker 0.004 (locally installed, not on CPAN yet).
+
+Client::verify_auth_for_image_ref is the new seam: undef when auth_for_image_ref resolves no credential (system->auth croaks on an empty AuthConfig, so there is nothing to ask), otherwise the engine's answer, croaking when the check fails.
+
+The ticket's before_build suggestion holds. Dist::Zilla::Dist::Builder::release sets DZIL_RELEASING before it calls build_archive, measured on 6.037 through Dist::Zilla::Tester->release - so the hook can tell a release from a plain build, and the check runs before Dist::Zilla writes anything and before the image is built. Gated on DZIL_RELEASING && release_enabled && release_push. A rejected credential dies with build_image call count 0.
+
+Wording matters here and differs from the ticket: the fatal says the check FAILED, not that the credential was rejected. Podman answers a rejected credential with 500 (measured) and an unreachable registry with 500 as well (measured against a bogus localhost registry) - the status separates neither, so the engine's own text is carried through instead of a claim we cannot back.
+
+No credential resolved is not a failure: logged as 'the release push will be anonymous', release proceeds. DZIL_DOCKER_API_SKIP_PRECHECK=1 now skips this check along with the engine probe - the guard sits before both. Documented in POD, README and Changes.
+
+Tests: t/54-release-auth-precheck.t - fires on release, not on a plain build, not with release_push = 0; rejection fatal before build_image; undef proceeds; the skip variable proved to matter against a credential armed to croak. Mutation-verified by the orchestrator: dropping the DZIL_RELEASING gate turns subtest 2 red. lib/ restored and md5-verified afterwards.
