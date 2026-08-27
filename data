@@ -1,0 +1,31 @@
+---
+claimed_at: 2026-08-27T12:48:22Z
+claimed_by: main
+class: standard
+completed: 2026-08-27T12:48:22Z
+created: 2026-08-27T12:42:10Z
+id: 11
+priority: medium
+started: 2026-08-27T12:48:22Z
+status: done
+tags:
+- pod
+title: README describes registry auth and tag defaults wrong
+updated: 2026-08-27T12:48:22Z
+---
+
+Two pre-existing inaccuracies in README.md, found during the karr #6/#10 doc pass and left untouched there because they are unrelated to those tickets.
+
+1. 'Registry auth' (~line 159) says credentials come from 'docker login' or a DOCKER_AUTH_CONFIG JSON env var. Client.pm reads ~/.docker/config.json, or the directory named by $DOCKER_CONFIG. DOCKER_AUTH_CONFIG is read nowhere in this distribution - a user following the README would set a variable that does nothing.
+
+2. 'Tags' (~line 86) says the default is 'latest plus %v'. The actual default is ['latest', '%V', '%v'] - three tags. The POD states it correctly, so this is README-only drift.
+
+Both are README-only; the POD is right in both places. Verify against lib/ before editing, not against the README's own wording.
+
+2026-08-27: fixed in README.md.
+
+- Registry auth section rewritten against Client.pm: config.json from $DOCKER_CONFIG or ~/.docker/config.json, auths block only, identitytoken > base64 auth > plain username/password, Docker Hub key spellings. DOCKER_AUTH_CONFIG claim removed - grep confirms the client reads only DOCKER_CONFIG and HOME.
+- Added what bit us on this machine: podman login writes $XDG_RUNTIME_DIR/containers/auth.json (REGISTRY_AUTH_FILE overrides), which this plugin does not read - documented 'podman login --authfile ~/.docker/config.json' as the fix.
+- Added that credsStore/credHelpers are unsupported (no code path reads them), so the push silently goes anonymous - with the precheck log line that now says so.
+- Tag default corrected to latest, %V, %v plus the note that setting tag replaces the list.
+- Third finding, not in the original ticket: the template variable table was missing %V entirely - which the default uses - along with %vmaj and %vmin. Added. The POD documents no template variables at all, so the README table is the only reference.
