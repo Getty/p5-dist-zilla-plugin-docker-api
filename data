@@ -1,0 +1,19 @@
+---
+claimed_at: 2026-08-29T16:32:23Z
+claimed_by: orchestrator
+class: standard
+completed: 2026-08-29T16:32:23Z
+created: 2026-08-29T16:21:39Z
+id: 12
+priority: medium
+started: 2026-08-29T16:21:57Z
+status: done
+title: push_image an API::Docker 0.004 Croak-Semantik anpassen
+updated: 2026-08-29T16:32:23Z
+---
+
+API::Docker 0.004 (unreleast, cpanfile-Pin steht schon) baut das Interface um. Analyse der 7 vom Client genutzten Aufrufe: version/system->auth/build/tag unveraendert. inspect liefert jetzt getyptes Type::ImageInspect (snake_case) statt CamelCase-HASH -- aber inspect_image hat keinen Konsumenten, kein Bruch. distribution->exists ist jetzt echt (vorher Stub) -- fail_if_tag_exists ist bereits verdrahtet, kein Change.
+
+EINZIGER Code-Fix: images->push croakt im Fehlerfall jetzt mit API::Docker::Error::Stream (hat ->events) bzw. auf Podman Error::HTTP, statt ein ARRAY-ref mit errorDetail zurueckzugeben. push_image (Client.pm:381-393) durchsucht ein Array, das nie mehr Fehler enthaelt -> Croak fliegt ungefangen. Fix analog zum build_image-Fehlerpfad (Client.pm:186-196): eval, Croak fangen, ueber logger_fatal melden.
+
+Dazu: Regressionstest (croakender push -> log_fatal). Doku: CLAUDE.md + dzil-docker-rules.md 'fail_if_tag_exists no-op / hard 0'-Aussage ist ueberholt. Changes-Eintrag unter {{$NEXT}}.
