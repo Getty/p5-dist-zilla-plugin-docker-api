@@ -384,7 +384,30 @@ sub push_image {
     my $image_ref = $arg{image_ref};
     my $auth = exists $arg{auth} ? $arg{auth} : $self->auth_for_image_ref($image_ref);
 
-    my $events = $self->docker->images->push($image_ref, auth => $auth);
+    my $events;
+    eval {
+        $events = $self->docker->images->push($image_ref, auth => $auth);
+    };
+
+    if (my $err = $@) {
+        # API::Docker 0.004 croaks on a push failure instead of handing back the
+        # errorDetail event in the returned array (against Docker an
+        # API::Docker::Error::Stream with ->events, on Podman it may be a plain
+        # HTTP error). Pull the message off the stream event when it is there,
+        # otherwise report the exception itself (api-docker #12).
+        my $message = "$err";
+        if (ref $err && $err->can('events')) {
+            for my $event (@{ $err->events }) {
+                next unless $event->{errorDetail};
+                $message = $event->{errorDetail}{message};
+                last;
+            }
+        }
+        $self->logger_fatal->("Push error: " . $message);
+    }
+
+    # A success still returns the raw array; keep scanning it, defensively, in
+    # case an engine reports a failure inside a 200 stream.
     for my $event (@{$events // []}) {
         if ($event->{errorDetail}) {
             $self->logger_fatal->("Push error: " . $event->{errorDetail}{message});

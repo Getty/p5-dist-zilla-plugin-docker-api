@@ -42,6 +42,13 @@
     gives 500 "... dial tcp ... connect: connection refused"), so the
     status cannot tell them apart and the engine's own text is carried
     through instead.
+  - A failed release push is fatal again. API::Docker 0.004 croaks on a
+    push failure instead of returning the errorDetail event in its result
+    array, so the old array scan never saw the failure and the croak
+    escaped push_image uncaught. It is caught now and surfaced through the
+    same log_fatal, carrying the engine's errorDetail message when the
+    error is a stream error, and the exception itself otherwise -- rootless
+    Podman raises a plain HTTP error with no events.
   - DZIL_DOCKER_API_SKIP_PRECHECK=1 now skips the registry credential
     check as well as the engine version probe.
   - cpanfile requires API::Docker 0.004, which is where

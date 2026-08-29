@@ -98,10 +98,12 @@ creating unless the user names a specific item to handle.
   `unix:///run/user/1000/podman/podman.sock`. `/var/run/docker.sock` does not exist, and
   that is the only fallback the plugin has, so anything live needs `DOCKER_HOST` set
   explicitly.
-- **`fail_if_tag_exists` is a documented no-op** — `remote_tag_exists` returns a hard
-  `0`, so the check never fires. The POD and `README.md` say so. Implementing it needs
-  a registry endpoint `API::Docker` does not have (karr #6, blocked). Do not
-  rediscover it as a new finding, and do not try to answer it from the local daemon.
+- **`fail_if_tag_exists` asks the *registry*, not the local daemon.** It runs through
+  `API::Docker`'s `distribution->exists` (`GET /distribution/{name}/json`) — real since
+  API::Docker 0.004 (it was previously a stub that always answered `no`). Rootless
+  Podman has no `/distribution` route, so there the lookup croaks and the release
+  aborts rather than silently treating the tag as free. The POD and `README.md`
+  describe this. Don't try to answer the question from the local daemon.
 - **An unknown dist.ini key is silently discarded, not rejected.** That is how
   `dockerfile = ...` went unnoticed for so long: the attribute carried
   `init_arg => 'file'`, so the documented key fell through to the default with no
