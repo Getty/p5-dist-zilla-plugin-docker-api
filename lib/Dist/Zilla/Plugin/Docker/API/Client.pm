@@ -1,6 +1,6 @@
 package Dist::Zilla::Plugin::Docker::API::Client;
 # ABSTRACT: Thin adapter around API::Docker
-our $VERSION = '0.104';
+our $VERSION = '0.105';
 use Moo;
 use Archive::Tar;
 use Carp qw( croak );

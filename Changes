@@ -1,3 +1,5 @@
+{{$NEXT}}
+
 0.104     2026-08-30 03:51:54Z
   - "dockerfile = ..." in a dist.ini now takes effect; the deprecated
     "file = ..." spelling still works and warns.
