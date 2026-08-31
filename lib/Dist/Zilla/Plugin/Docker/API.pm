@@ -747,14 +747,22 @@ a skipped build phase means there is no image to tag and push.
 
 The release push, the C<fail_if_tag_exists> lookup and the registry
 credential precheck above all resolve a credential for an image reference
-the same way, through C<auth_for_image_ref>: the C<auths> block of
-F<config.json> in the directory named by C<DOCKER_CONFIG>, or
-F<~/.docker/config.json> when that is unset. Nothing else is read --
-C<REGISTRY_AUTH_FILE> and Podman's own
-F<$XDG_RUNTIME_DIR/containers/auth.json> are not consulted, regardless of
-which engine is at the other end of C<DOCKER_HOST>.
+the same way, through C<auth_for_image_ref>, which walks an ordered list of
+candidate auth files rather than reading a single one. For the registry the
+image reference names, the first candidate file with a usable entry for it
+wins; a file with none falls through to the next, so a Docker config and a
+Podman auth file can each supply credentials for different registries in
+the same run. In order: C<REGISTRY_AUTH_FILE>, if set, names the file
+directly; then F<config.json> in the directory named by C<DOCKER_CONFIG>,
+if set; then F<$XDG_RUNTIME_DIR/containers/auth.json>, if
+C<XDG_RUNTIME_DIR> is set; then F<containers/auth.json> under
+C<XDG_CONFIG_HOME> (or under F<~/.config> when that is unset); and finally
+F<~/.docker/config.json>. F<~/.dockercfg>, Docker's legacy
+pre-C<config.json> format, is never read.
 
-Within the matching registry's entry, the first of these present wins: an
+All five files share the same C<auths> block, so once a file is chosen the
+selection within the matching registry's entry does not depend on which one
+supplied it. The first of these present wins: an
 C<identitytoken>; a base64 C<auth> field decoded to C<username:password>;
 plain C<username> / C<password> fields. Docker Hub is matched under any of
 C<https://index.docker.io/v1/> and C<v2/>, C<index.docker.io> or
@@ -763,13 +771,11 @@ secret to an external helper is not supported -- nothing in this plugin
 reads either key, so such a registry resolves to no credential and any
 request against it goes out anonymous rather than failing.
 
-C<docker login> is the usual way to populate the file. C<podman login>
-writes to its own auth file instead
-(F<$XDG_RUNTIME_DIR/containers/auth.json> by default, overridable with
-C<REGISTRY_AUTH_FILE>), which this plugin never reads; point it at the file
-that is read instead:
-
-    podman login --authfile ~/.docker/config.json registry.example.com
+A plain C<docker login> or C<podman login> is now picked up with no extra
+configuration: Podman's own default auth file is candidate three above. If
+C<podman login --authfile PATH> was used to write somewhere else, set
+C<REGISTRY_AUTH_FILE=PATH> in the environment C<dzil> runs in so candidate
+one finds it.
 
 Finding no credential for a registry is never an error by itself in this
 plugin -- both C<fail_if_tag_exists> and the release push treat it as "go

@@ -185,23 +185,31 @@ release fails until it's turned back off.
 
 ### Registry auth
 
-Credentials are read from the Docker CLI's config file — `config.json` in the
-directory named by `DOCKER_CONFIG`, or `~/.docker/config.json` when that is
-unset. Only the `auths` block is consulted, and for the matching registry
-entry, in this order: an `identitytoken`, a base64 `auth` field
+Credentials are resolved from an ordered list of auth files — for the
+target registry, the first file with a usable entry wins, and a file with
+none falls through to the next, so a Docker config and a Podman auth file
+can each cover different registries in the same run:
+
+1. `REGISTRY_AUTH_FILE`, if set — the path it names, directly.
+2. `config.json` in the directory named by `DOCKER_CONFIG`, if set.
+3. `$XDG_RUNTIME_DIR/containers/auth.json`, if `XDG_RUNTIME_DIR` is set.
+4. `containers/auth.json` under `XDG_CONFIG_HOME`, or under `~/.config`
+   when that is unset.
+5. `~/.docker/config.json`.
+
+`~/.dockercfg` (Docker's legacy pre-`config.json` format) is never read.
+All five share the same `auths` block, and within the matching registry's
+entry the selection is the same regardless of which file supplied it, in
+this order: an `identitytoken`, a base64 `auth` field
 (`username:password`), or plain `username` / `password` fields. For Docker
 Hub the usual spellings (`https://index.docker.io/v1/` and `/v2/`,
 `index.docker.io`, `docker.io`) are all tried.
 
-So `docker login` is the way to set this up — but check what it actually
-wrote. Podman is a separate case: `podman login` writes to its own auth file
-(`$XDG_RUNTIME_DIR/containers/auth.json` by default, `REGISTRY_AUTH_FILE`
-overrides it), which this plugin does not read. Point it at the file that is
-read instead:
-
-```bash
-podman login --authfile ~/.docker/config.json ghcr.io
-```
+A plain `docker login` or `podman login` is picked up with no extra setup:
+Podman's own default auth file is candidate 3 above. If
+`podman login --authfile PATH` was used to write somewhere else, set
+`REGISTRY_AUTH_FILE=PATH` in the environment `dzil` runs in so candidate 1
+finds it.
 
 A `credsStore` or `credHelpers` entry
 delegating the secret to an external helper is **not** supported: the

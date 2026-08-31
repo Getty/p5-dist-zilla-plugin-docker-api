@@ -1,4 +1,12 @@
 {{$NEXT}}
+  - Registry credentials are now resolved from an ordered list of auth
+    files instead of only ~/.docker/config.json, so a plain "podman
+    login" (or "docker login") is picked up automatically. The order,
+    first file with a matching entry winning, is REGISTRY_AUTH_FILE,
+    then $DOCKER_CONFIG/config.json, then Podman's
+    $XDG_RUNTIME_DIR/containers/auth.json, then
+    ~/.config/containers/auth.json, then ~/.docker/config.json. The
+    per-registry entry selection is unchanged.
 
 0.104     2026-08-30 03:51:54Z
   - "dockerfile = ..." in a dist.ini now takes effect; the deprecated
