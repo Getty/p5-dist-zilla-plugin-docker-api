@@ -1,0 +1,15 @@
+---
+claimed_at: 2026-08-31T01:31:47Z
+claimed_by: main
+class: standard
+completed: 2026-08-31T01:31:47Z
+created: 2026-08-31T01:22:30Z
+id: 13
+priority: medium
+started: 2026-08-31T01:22:49Z
+status: done
+title: Podman-Auth-File-Detection in Client.pm
+updated: 2026-08-31T01:31:47Z
+---
+
+auth_for_image_ref soll neben ~/.docker/config.json auch Podmans auth.json erkennen. Geordnete Kandidatenliste (erste mit Treffer gewinnt): 1) REGISTRY_AUTH_FILE 2) DOCKER_CONFIG/config.json 3) $XDG_RUNTIME_DIR/containers/auth.json 4) ~/.config/containers/auth.json 5) ~/.docker/config.json. Format identisch, _auth_for_registry unangetastet. Nur Datei-Lesen. Worker: docker_config_path -> geordnete Liste, test-injizierbar. Tests + POD/README + Changes.
