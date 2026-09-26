@@ -158,7 +158,7 @@ yourself — principle and lane are in `.claude/rules/dzil-docker-rules.md`.
 |---|---|
 | Implement / refactor / debug the plugin, the client adapter, cpanfile | `dzil-docker-worker` (default) |
 | Write/extend tests | `dzil-docker-test-writer` |
-| Pre-release audit | `dzil-docker-release-checker` |
+| Commits, `Changes`, card → done, pre-release audit | `dzil-docker-release-manager` |
 | POD and README | `dzil-docker-doc-writer` |
 
 What the Docker daemon itself accepts or answers is not this repo's question —

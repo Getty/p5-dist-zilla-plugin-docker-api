@@ -8,7 +8,7 @@ briefing:
     - dzil-docker-core
     - getty-perl-core
     - getty-perl-moo
-    - kanban-issues-karr-cli
+    - kanban-issues-karr-ticket
 ---
 
 You are the dzil-docker-test-writer for **Dist::Zilla::Plugin::Docker::API**.

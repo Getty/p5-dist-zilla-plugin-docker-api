@@ -6,8 +6,8 @@ allowed-tools: Read, Edit, Grep, Glob
 briefing:
   skills:
     - dzil-docker-core
-    - getty-perl-release-author-getty
     - getty-perl-core
+    - getty-perl-pod
 ---
 
 You are the dzil-docker-doc-writer for **Dist::Zilla::Plugin::Docker::API**.

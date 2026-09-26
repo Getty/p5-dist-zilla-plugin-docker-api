@@ -34,7 +34,7 @@ This rule depends on whether the Agent/Task tool is available to you.
 
 - **You can spawn subagents** (orchestrating main agent): Do NOT touch behavior-relevant
   code yourself — delegate. Your lane: coordinate, inspect, plan, review diffs, run
-  tests, manage git, edit non-behavioral docs. When in doubt, delegate. Why: only the
+  tests, edit non-behavioral docs. When in doubt, delegate. Why: only the
   `dzil-docker-*` agents get their skills force-loaded via `briefing.skills`; you get no
   briefing and would touch internals with too little context.
 
@@ -42,7 +42,7 @@ This rule depends on whether the Agent/Task tool is available to you.
   |---|---|
   | Implement / refactor / debug the plugin, the client adapter, cpanfile | `dzil-docker-worker` (default) |
   | Write/extend tests | `dzil-docker-test-writer` |
-  | Pre-release audit | `dzil-docker-release-checker` |
+  | Commits, `Changes`, card → done, pre-release audit | `dzil-docker-release-manager` |
   | POD and README | `dzil-docker-doc-writer` |
 
   A question about what the Docker daemon itself accepts or answers is not this repo's —
@@ -59,11 +59,11 @@ Pure prose docs and `Changes` notes are not.
 ## Coordination — karr board (always in scope)
 
 Ticket coordination is the orchestrating agent's job, so `karr` is always in scope —
-don't invoke the `kanban-issues-karr-cli` skill first, just use it. Git-native kanban;
+don't invoke the `kanban-issues-karr-coordination` skill first, just use it. Git-native kanban;
 state lives in `refs/karr/*`; one board, this repo. Day-to-day: `karr list --compact` /
 `karr board` for open work; `karr show ID` for detail; `karr create/edit/move/handoff`
 for the usual flow; mutating commands auto-sync. Full surface: skill
-`kanban-issues-karr-cli`.
+`kanban-issues-karr-coordination`.
 
 Cross-repo work is a ticket on the *other* repo's board (`cd ../p5-api-docker && karr
 create …`), never a direct edit there.
@@ -128,6 +128,6 @@ creating unless the user names a specific item to handle.
 Module loading, `$VERSION`, cpanfile pinning and house style: skills `getty-perl-core`,
 `getty-perl-moose` (the plugin class), `getty-perl-moo` (the three helper classes).
 `[@Author::GETTY]`, POD weaving, `{{$NEXT}}`: skill `getty-perl-release-author-getty`.
-dist.ini mechanics: `perl-release-dist-ini`. Commit messages: `getty-git-commit-style`.
+dist.ini mechanics: `perl-release-dist-ini`. Commits: only `dzil-docker-release-manager` commits (it carries `getty-git-commit-style`).
 Architecture, phase hooks and the client seam: `dzil-docker-core`. Don't duplicate any of
 it here.
