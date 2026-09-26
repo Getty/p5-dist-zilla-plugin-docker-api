@@ -2,7 +2,6 @@
 name: dzil-docker-test-writer
 description: "Write Dist-Zilla-Plugin-Docker-API tests with Test::More and Dist::Zilla::Tester driving an inline dist.ini, swapping the client for the Recorder fake in t/lib. The suite never reaches a container engine or the network. Use for test additions, regression scaffolding and coverage of the client adapter's internals."
 model: sonnet
-allowed-tools: Read, Edit, Write, Bash, Glob, Grep
 briefing:
   skills:
     - dzil-docker-core

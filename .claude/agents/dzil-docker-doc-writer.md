@@ -2,7 +2,7 @@
 name: dzil-docker-doc-writer
 description: "Write and maintain Dist-Zilla-Plugin-Docker-API POD in the house format (=attr, =method, =head1, woven by @Author::GETTY) and keep README.md in step. Documents the configuration surface as dist.ini actually accepts it; does not change code."
 model: sonnet
-allowed-tools: Read, Edit, Grep, Glob
+disallowedTools: Write, NotebookEdit, Bash
 briefing:
   skills:
     - dzil-docker-core

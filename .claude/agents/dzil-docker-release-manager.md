@@ -2,7 +2,6 @@
 name: dzil-docker-release-manager
 description: "Owns dzil-docker's commits and release readiness — cuts commits from the worker's commit-ready tree, writes commit messages and Changes entries, moves karr cards to done. Release audit: Dist-Zilla-Plugin-Docker-API before release — cpanfile matches what the code actually loads, the API::Docker pin is satisfiable, $VERSION consistent across lib, Changes current, dzil build clean, POD in sync with the dist.ini attribute surface. Workers never commit; this agent does. Never pushes, tags or releases."
 model: sonnet
-allowed-tools: Read, Edit, Write, Bash, Glob, Grep
 briefing:
   skills:
     - getty-git-commit-style

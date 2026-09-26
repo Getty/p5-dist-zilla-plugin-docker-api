@@ -2,7 +2,6 @@
 name: dzil-docker-worker
 description: "Default Dist-Zilla-Plugin-Docker-API worker — the plugin itself: the Moose plugin class and its dist.ini attribute surface, the before_build/after_build/release hooks, tag template expansion, the API::Docker client adapter, cpanfile and dist plumbing. Use for implementation, refactoring and debugging in this distribution. Questions about what the Docker daemon itself accepts or answers belong in ../p5-api-docker, not here. Leaves a commit-ready tree; never commits — commits belong to dzil-docker-release-manager."
 model: inherit
-allowed-tools: Read, Edit, Write, Bash, Glob, Grep
 briefing:
   skills:
     - dzil-docker-core
