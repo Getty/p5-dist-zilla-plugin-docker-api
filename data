@@ -1,0 +1,26 @@
+---
+class: standard
+created: 2026-10-06T19:41:46Z
+id: 16
+priority: low
+status: backlog
+tags:
+- bug
+- build
+- options
+- review-2026-10-06
+title: Only the first platform is used although 'platform' is documented as repeatable
+updated: 2026-10-06T19:41:46Z
+---
+
+`platform` is a multi-value option (`API.pm:68-72`, `mvp_multivalue_args` at `:637`) and the POD says "Target platform (can be repeated)" (`:831`); the bundle subsection documents it as "Multi-value" too. `after_build` passes only the first one on: `platform => $platforms[0]` (`API.pm:347,361`). A dist.ini with
+
+    platform = linux/amd64
+    platform = linux/arm64
+
+builds and pushes an amd64-only image and says nothing.
+
+Done when a second `platform` value is either honoured or rejected with a clear `log_fatal` (the classic `/build` endpoint takes one platform, so rejecting is the honest minimum), and the POD says which.
+
+---
+Fleet review 2026-10-06 · kind: bug · confidence: verified
