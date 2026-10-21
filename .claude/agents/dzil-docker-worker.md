@@ -5,6 +5,7 @@ model: inherit
 briefing:
   skills:
     - dzil-docker-core
+    - dzil-docker-hazards
     - getty-perl-core
     - getty-perl-moose
     - getty-perl-moo

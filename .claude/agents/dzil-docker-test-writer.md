@@ -5,6 +5,7 @@ model: sonnet
 briefing:
   skills:
     - dzil-docker-core
+    - dzil-docker-hazards
     - getty-perl-core
     - getty-perl-moo
     - kanban-issues-karr-ticket
