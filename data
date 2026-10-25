@@ -1,0 +1,48 @@
+---
+claimed_at: 2026-10-25T01:10:41Z
+claimed_by: k14-k16
+class: standard
+completed: 2026-10-25T01:10:41Z
+created: 2026-10-06T19:41:36Z
+id: 14
+priority: high
+started: 2026-10-25T01:01:04Z
+status: done
+tags:
+- bug
+- build
+- client
+- review-2026-10-06
+title: 'Build context tar drops file modes: executables arrive in the image without
+  +x'
+updated: 2026-10-25T01:10:41Z
+---
+
+`Client::_create_tar` (`lib/Dist/Zilla/Plugin/Docker/API/Client.pm:297-321`) slurps every file and adds it with `$tar->add_data($name, $content)` and no options. Archive::Tar then gives every entry its default mode (0666 minus umask) and type "regular file". The build root Dist::Zilla wrote has the right modes (ExecDir makes `bin/*` 0755); the context the engine receives does not.
+
+Reproduce:
+
+    mkdir -p /tmp/ctx/bin /tmp/ctx/empty
+    printf '#!/bin/sh\necho hi\n' > /tmp/ctx/bin/entry.sh; chmod 755 /tmp/ctx/bin/entry.sh
+    echo x > /tmp/ctx/.dockerignore; ln -s bin/entry.sh /tmp/ctx/link.sh
+    perl -Ilib -MDist::Zilla::Plugin::Docker::API::Client -MArchive::Tar -e '
+      my $c=Dist::Zilla::Plugin::Docker::API::Client->new(logger=>sub{},logger_fatal=>sub{die @_});
+      my $t=$c->_create_tar(shift,"Dockerfile"); open my $fh,"<",$t; my $tar=Archive::Tar->new($fh);
+      printf "%-14s mode=%04o type=%s\n",$_->full_path,$_->mode,$_->type for $tar->get_files' /tmp/ctx
+    # link.sh        mode=0664 type=0
+    # bin/entry.sh   mode=0664 type=0
+
+Four things are lost in one go:
+- the executable bit (0755 -> 0664): `COPY entrypoint.sh ...` + `ENTRYPOINT` fails with "permission denied" unless the Dockerfile repairs it;
+- symlinks are followed and stored as regular files (`_collect_files` uses `is_dir`/`slurp_raw`, `:327-333`); a dangling symlink makes `slurp_raw` die;
+- every top-level dotfile is skipped (`next if $name =~ /^\./`, `:306`), including `.dockerignore`, while dotfiles one level down are kept;
+- empty directories are not in the archive.
+
+The fleet already works around the first one: `karr/Dockerfile:82`, `p5-mcp-wiki/Dockerfile:48` and `p5-mcp-hub/Dockerfile:86` each `RUN chmod +x` a file they just copied.
+
+Done when the context keeps mode and symlinks (e.g. `Archive::Tar->add_files` on paths relative to the context, or `add_data` with `{ mode => ... }` and a symlink entry), the dotfile rule is either dropped or documented, and a test builds a context with an executable, a symlink and a dotfile and asserts on the tar entries. No test under `t/` looks at modes today.
+
+---
+Fleet review 2026-10-06 · kind: bug · confidence: verified
+
+2026-10-25 01:08 Commit d363da3 (branch k14-k16). Test t/80 war rot (dangling symlink killed slurp_raw). Also found: _create_tar ignores its dockerfile argument; the bundle repo Docker.pm:37 still sets build_load/release_load and will now warn (coordinator adapts).
