@@ -152,7 +152,8 @@ behavior is only ever verified through the test suite.
 ## Delegation
 
 Delegate behavior-relevant code to the right agent instead of touching it
-yourself — principle and lane are in `.claude/rules/dzil-docker-rules.md`.
+yourself — the principle is a shared house rule (skilletor bundle
+`getty-cpan-dist@getty`); the lanes are in `.claude/rules/dzil-docker-rules.md`.
 
 | Task | Agent |
 |---|---|
