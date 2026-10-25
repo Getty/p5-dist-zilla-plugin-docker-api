@@ -139,7 +139,7 @@ pull       = 0
 no_cache   = 0
 rm         = 1
 force_rm   = 1
-platform   = linux/amd64    # multi-value
+platform   = linux/amd64    # exactly one; a second value is a fatal error
 ```
 
 | Context mode | Description                          |

@@ -226,6 +226,17 @@ sub before_build {
         return;
     }
 
+    # The classic /build endpoint takes exactly one platform; a second value
+    # would otherwise be dropped without a word. This is configuration, not
+    # engine contact, so DZIL_DOCKER_API_SKIP_PRECHECK does not skip it.
+    my @platforms = @{ $self->platform };
+    if (@platforms > 1) {
+        $self->log_fatal('only one platform is supported, got '
+            .scalar(@platforms).': '.join(', ', @platforms)
+            .' - the /build endpoint takes exactly one platform, and this '
+            .'plugin is not built for multi-arch images');
+    }
+
     return if $ENV{DZIL_DOCKER_API_SKIP_PRECHECK};
 
     my $info = eval { $self->client->engine_info };
@@ -800,7 +811,10 @@ without the check.
 
 =item C<label> - OCI labels (can be repeated, template-enabled)
 
-=item C<platform> - Target platform (can be repeated)
+=item C<platform> - Target platform, exactly one (e.g. C<linux/arm64>). The key
+is repeatable only so that a second value is refused with a clear error: the
+/build endpoint takes one platform, and this plugin is not built for multi-arch
+images.
 
 =back
 
