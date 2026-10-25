@@ -26,7 +26,7 @@ my $client = Dist::Zilla::Plugin::Docker::API::Client->new(
     logger_fatal => sub { die @_ },
 );
 
-my $tarref = $client->_create_tar("$ctx", 'Dockerfile');
+my $tarref = $client->_create_tar("$ctx");
 open my $fh, '<', $tarref or die $!;
 my $tar = Archive::Tar->new($fh);
 my %entry = map { my $n = $_->full_path; $n =~ s{/\z}{}; ($n => $_) } $tar->get_files;

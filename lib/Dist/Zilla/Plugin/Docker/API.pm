@@ -330,7 +330,6 @@ sub after_build {
     my $context_tar = {
         type       => 'dir',
         path       => $context_path->stringify,
-        dockerfile => $self->dockerfile,
     };
 
     my @platforms = @{ $self->platform };

@@ -205,7 +205,7 @@ sub build_image {
     my $tarball;
     if (ref($context) eq 'HASH') {
         if ($context->{type} eq 'dir') {
-            $tarball = $self->_create_tar($context->{path}, $context->{dockerfile});
+            $tarball = $self->_create_tar($context->{path});
         }
         elsif ($context->{type} eq 'archive') {
             $tarball = Path::Tiny::path($context->{path})->slurp_raw;
@@ -295,8 +295,10 @@ sub _is_build_step_header {
     return 0;
 }
 
+# The whole directory as a tar. Which file in it is the Dockerfile is the
+# engine's business: build_image passes that as its own dockerfile option.
 sub _create_tar {
-    my ($self, $dir, $dockerfile) = @_;
+    my ($self, $dir) = @_;
 
     my $root = Path::Tiny::path($dir);
     my $tar  = Archive::Tar->new;
