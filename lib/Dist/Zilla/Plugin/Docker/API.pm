@@ -71,22 +71,6 @@ has platform => (
     default => sub { [] },
 );
 
-# Build behavior
-has build_load => (
-    is      => 'ro',
-    isa     => 'Bool',
-    default => 1,
-);
-
-# Deprecated reader; the constructor key is funneled into build_load.
-has load => (
-    is       => 'ro',
-    isa      => 'Bool',
-    lazy     => 1,
-    init_arg => undef,
-    default  => sub { shift->build_load },
-);
-
 # Release behavior
 has release_push => (
     is      => 'ro',
@@ -101,12 +85,6 @@ has push => (
     lazy     => 1,
     init_arg => undef,
     default  => sub { shift->release_push },
-);
-
-has release_load => (
-    is      => 'ro',
-    isa     => 'Bool',
-    default => 0,
 );
 
 # When false (default), the build log only echoes Dockerfile step headers
@@ -574,12 +552,11 @@ sub _log_build_result {
 
 # Deprecated one-to-one spellings, old key => canonical key. These used to be
 # declared as lazy attributes reading *from* the canonical one, which meant
-# setting them in dist.ini changed nothing at all: 'load = 0' left build_load
-# at 1 and the code reads build_load. They are funneled here instead, like
+# setting them in dist.ini changed nothing at all: 'push = 0' left
+# release_push at 1 and the code reads release_push. They are funneled here instead, like
 # build_tag/release_tag, so they actually take effect.
 my %DEPRECATED_KEY = (
     file       => 'dockerfile',
-    load       => 'build_load',
     push       => 'release_push',
     repository => 'image',
 );
@@ -603,13 +580,13 @@ around BUILDARGS => sub {
         $args->{$new} = $value;
     }
 
-    # 'phase' has no canonical counterpart -- the build and release phases are
-    # implicit now. Drop it with a warning rather than letting an unknown key
-    # be silently ignored.
-    if (exists $args->{phase}) {
-        delete $args->{phase};
-        warn "[Docker::API] 'phase' is deprecated and has no effect; "
-           ."the build and release phases are implicit.\n";
+    # Keys that no longer mean anything -- there is no switch behind them.
+    # Drop them with a warning rather than letting an unknown key be silently
+    # ignored.
+    for my $removed (qw(build_load load phase release_load)) {
+        next unless exists $args->{$removed};
+        delete $args->{$removed};
+        warn "[Docker::API] '".$removed."' is no longer supported and has no effect.\n";
     }
 
     my @legacy = grep { exists $args->{$_} } qw(build_tag release_tag);
@@ -656,7 +633,6 @@ __END__
 
     dockerfile = Dockerfile
 
-    build_load   = 1
     release_push = 1
 
 Or via the L<@Author::GETTY|Dist::Zilla::PluginBundle::Author::GETTY> bundle:
@@ -674,8 +650,8 @@ the Dist::Zilla-built distribution.
 
 | Dzil command | Docker behavior |
 |---|---|
-| C<dzil build>   | Build image, apply every C<tag>, load into daemon (if C<build_load=1>), no push |
-| C<dzil release> | Re-tag the built image with every C<tag>, push (if C<release_push=1>), load (if C<release_load=1>) |
+| C<dzil build>   | Build image, apply every C<tag>, no push |
+| C<dzil release> | Re-tag the built image with every C<tag>, push (if C<release_push=1>) |
 
 The same C<tag> list is used in both phases — C<dzil build> produces local tags
 for verification, C<dzil release> re-applies them (against the already-built
@@ -795,11 +771,7 @@ explicitly B<replaces> the default list, it does not append to it.
 
 =item C<dockerfile> - Dockerfile name (default: C<Dockerfile>)
 
-=item C<build_load> - Load built image into local Docker daemon (default: true)
-
 =item C<release_push> - Push to registry during release (default: true)
-
-=item C<release_load> - Load released image locally (default: false)
 
 =item C<build_verbose> - When false (default), the build log only echoes
 Dockerfile step headers — the legacy builder format C<Step N/M : ...>,
@@ -859,17 +831,27 @@ values are ignored.
 
 =item C<push> - Use C<release_push> instead.
 
-=item C<load> - Use C<build_load> instead.
-
-=item C<phase> - No longer needed; build and release phases are implicit. It is
-accepted, warned about and discarded; it has no canonical counterpart.
-
 =back
 
-Note that C<repository>, C<push> and C<load> did B<not> work as aliases before
+Note that C<repository> and C<push> did B<not> work as aliases before
 0.104: they were declared as readers taking their value I<from> the canonical
 attribute, so setting one in a F<dist.ini> had no effect whatsoever. They are
 funneled properly now.
+
+=head1 REMOVED
+
+These keys are no longer supported. Each is warned about and discarded; none
+has a replacement.
+
+=over 4
+
+=item C<phase> - The build and release phases are implicit.
+
+=item C<build_load>, C<release_load>, C<load> - The image is built through the
+engine API, where it lands in the engine's image store regardless, so there is
+nothing left to switch.
+
+=back
 
 =head1 SEE ALSO
 

@@ -42,8 +42,8 @@ build-vs-release list.
 
 | Dzil command   | Docker behavior |
 |----------------|-----------------|
-| `dzil build`   | Build image, apply every `tag`, load into local daemon (if `build_load=1`). No push. |
-| `dzil release` | Re-tag the already-built image with every `tag`, push (if `release_push=1`), load (if `release_load=1`). |
+| `dzil build`   | Build image, apply every `tag`. No push. |
+| `dzil release` | Re-tag the already-built image with every `tag`, push (if `release_push=1`). |
 
 ## Container engine
 
@@ -125,12 +125,10 @@ Available template variables:
 | `%a`     | Release archive path              | `/path/to/x.tgz` |
 | `%p`     | Plugin instance name              | `Docker::API`    |
 
-### Build/release switches
+### Release switch
 
 ```ini
-build_load   = 1     # load built image into local daemon (default: 1)
 release_push = 1     # push during release (default: 1)
-release_load = 0     # also load during release (default: 0)
 ```
 
 ### Build options
@@ -256,13 +254,17 @@ The following config keys still work but emit a deprecation warning:
 | `build_tag`     | `tag`             |
 | `release_tag`   | `tag`             |
 | `repository`    | `image`           |
-| `phase`         | (no longer used)  |
 | `push`          | `release_push`    |
-| `load`          | `build_load`      |
 
 When `build_tag` and/or `release_tag` are given, their values are merged
 (build first, then release) into `tag`. If `tag` is also set explicitly,
 it wins and the legacy values are ignored.
+
+## Removed options
+
+`phase`, `build_load`, `release_load` and `load` are no longer supported and
+have no replacement: they are warned about and discarded. The image is built
+through the engine API, where it lands in the engine's image store anyway.
 
 ## Result object
 
