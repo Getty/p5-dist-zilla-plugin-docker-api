@@ -1,0 +1,34 @@
+---
+claimed_at: 2026-10-25T01:10:46Z
+claimed_by: k14-k16
+class: standard
+completed: 2026-10-25T01:10:46Z
+created: 2026-10-06T19:41:41Z
+id: 15
+priority: medium
+started: 2026-10-25T01:01:10Z
+status: done
+tags:
+- bug
+- docs
+- options
+- review-2026-10-06
+title: build_load and release_load are documented but never read
+updated: 2026-10-25T01:10:46Z
+---
+
+`build_load` (`lib/Dist/Zilla/Plugin/Docker/API.pm:75`) and `release_load` (`:106`) are declared, tested for their defaults (`t/15-plugin-defaults.t:62,64,98`) and documented as switches:
+
+- POD `API.pm:677-678`: "load into daemon (if build_load=1)", "load (if release_load=1)"; attribute list `:798`, `:802`.
+- `README.md:45-46,131,133`.
+
+No code path reads either one: `grep -rn 'build_load\|release_load' lib` finds only the declarations, the deprecated `load` reader and POD. `after_build` always builds through the engine API, where the image lands in the engine's store regardless, and `release` never loads anything. `build_load = 0` and `release_load = 1` change nothing. The comment at `API.pm:576-578` ("the code reads build_load") is no longer true.
+
+`[@Author::GETTY::Docker]` even sets `build_load => 1` on every plugin it creates (bundle `Docker.pm:37`) and passes `release_load` through.
+
+Done when the two are either removed (with the deprecation treatment `load` already has in BUILDARGS) and the POD/README tables corrected, or given a defined meaning. With an API-driven build there is probably nothing for them to switch, so removal is the likely answer; maintainer's call.
+
+---
+Fleet review 2026-10-06 · kind: bug · confidence: verified
+
+2026-10-25 01:08 Commit 68d36b6 (branch k14-k16). Subtest removed keys in t/35 war rot. Decision: phase, load, build_load, release_load share one removed-key loop; the phase warning text is now: no longer supported and has no effect.
