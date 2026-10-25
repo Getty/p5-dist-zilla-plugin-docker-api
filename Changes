@@ -1,4 +1,10 @@
 {{$NEXT}}
+  - The build context sent to the engine now keeps what Dist::Zilla wrote
+    into the build root: file modes (an executable stays executable, so
+    "COPY entrypoint.sh" plus ENTRYPOINT no longer needs a "RUN chmod
+    +x"), symlinks as symlink entries (dangling ones no longer abort the
+    build), and empty directories. Top-level dotfiles such as
+    .dockerignore are no longer left out of the context.
   - Registry credentials are now resolved from an ordered list of auth
     files instead of only ~/.docker/config.json, so a plain "podman
     login" (or "docker login") is picked up automatically. The order,

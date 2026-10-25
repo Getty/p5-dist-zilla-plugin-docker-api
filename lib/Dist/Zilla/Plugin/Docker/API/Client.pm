@@ -3,6 +3,7 @@ package Dist::Zilla::Plugin::Docker::API::Client;
 our $VERSION = '0.105';
 use Moo;
 use Archive::Tar;
+use Archive::Tar::Constant ();
 use Carp qw( croak );
 use Path::Tiny;
 use JSON::MaybeXS qw( decode_json );
@@ -298,18 +299,25 @@ sub _create_tar {
     my ($self, $dir, $dockerfile) = @_;
 
     my $root = Path::Tiny::path($dir);
-    my @entries = $self->_collect_files($root, $root);
-    my @files;
+    my $tar  = Archive::Tar->new;
 
-    for my $entry (@entries) {
+    for my $entry ($self->_collect_files($root, $root)) {
         my $name = $entry->relative($root)->stringify;
-        next if $name =~ /^\./;
-        push @files, $name => $entry->slurp_raw;
-    }
+        my @stat = lstat $entry->stringify;
+        my %opt  = ( mode => $stat[2] & 07777, mtime => $stat[9] );
 
-    my $tar = Archive::Tar->new;
-    for (my $i = 0; $i < @files; $i += 2) {
-        $tar->add_data($files[$i], $files[$i+1]);
+        if (-l $entry->stringify) {
+            $tar->add_data($name, '', {
+                %opt, type => Archive::Tar::Constant::SYMLINK(),
+                linkname => readlink($entry->stringify),
+            });
+        }
+        elsif (-d _) {
+            $tar->add_data($name, '', { %opt, type => Archive::Tar::Constant::DIR() });
+        }
+        else {
+            $tar->add_data($name, $entry->slurp_raw, \%opt);
+        }
     }
 
     my $tarball;
@@ -320,13 +328,18 @@ sub _create_tar {
     return \$tarball;
 }
 
+# Regular files, symlinks (never followed) and empty directories below $dir.
 sub _collect_files {
     my ($self, $root, $dir) = @_;
 
     my @files;
     for my $entry ($dir->children) {
-        if ($entry->is_dir) {
-            push @files, $self->_collect_files($root, $entry);
+        if (-l $entry->stringify) {
+            push @files, $entry;
+        }
+        elsif ($entry->is_dir) {
+            my @below = $self->_collect_files($root, $entry);
+            push @files, @below ? @below : $entry;
         }
         else {
             push @files, $entry;
