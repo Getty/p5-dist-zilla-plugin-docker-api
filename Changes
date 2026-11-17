@@ -1,3 +1,5 @@
+{{$NEXT}}
+
 0.106     2026-11-17 21:48:37Z
   - Requires API::Docker 0.005: when the engine rejects a build before it
     has read the whole context, the release stops with the engine's error
