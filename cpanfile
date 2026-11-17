@@ -1,4 +1,4 @@
-requires 'API::Docker', '0.004';
+requires 'API::Docker', '0.005';
 requires 'Archive::Tar';
 requires 'Carp';
 requires 'Dist::Zilla::Role::AfterBuild';
