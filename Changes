@@ -1,4 +1,6 @@
 {{$NEXT}}
+  - The build-context test passes on Windows: it writes its fixture files
+    without line-ending translation and compares the bytes the tar keeps.
 
 0.107     2026-11-18 02:25:08Z
   - Requires API::Docker 0.006, which installs with cpanm and on CPAN
