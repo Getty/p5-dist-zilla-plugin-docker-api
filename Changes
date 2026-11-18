@@ -2,6 +2,7 @@
 
   - Requires API::Docker 0.006, which installs with cpanm and on CPAN
     smokers.
+  - Requires perl 5.14, like API::Docker.
 
 0.106     2026-11-17 21:48:37Z
   - Requires API::Docker 0.005: when the engine rejects a build before it
