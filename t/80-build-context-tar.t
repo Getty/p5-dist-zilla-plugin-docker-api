@@ -12,12 +12,12 @@ use Dist::Zilla::Plugin::Docker::API::Client;
 # empty directories. Calls _create_tar directly.
 
 my $ctx = Path::Tiny->tempdir;
-$ctx->child('Dockerfile')->spew("FROM scratch\n");
+$ctx->child('Dockerfile')->spew_raw("FROM scratch\n");
 $ctx->child('bin')->mkpath;
 my $exe = $ctx->child('bin', 'entry.sh');
-$exe->spew("#!/bin/sh\necho hi\n");
+$exe->spew_raw("#!/bin/sh\necho hi\n");
 chmod 0755, "$exe";
-$ctx->child('.dockerignore')->spew("x\n");
+$ctx->child('.dockerignore')->spew_raw("x\n");
 $ctx->child('empty')->mkpath;
 
 # Windows without the right to create symbolic links (the default there) and
