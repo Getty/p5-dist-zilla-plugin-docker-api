@@ -1,4 +1,3 @@
-requires 'perl', '5.022';
 requires 'API::Docker', '0.006';
 requires 'Archive::Tar';
 requires 'Carp';
