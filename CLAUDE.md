@@ -30,7 +30,7 @@ for this distribution.
 
 6. **Perl edits go to a `dzil-docker-*` agent**, which gets
    `getty-perl-core` and the object-system skills force-loaded via
-   `briefing.skills`. If you are editing Perl without that briefing, load
+   `skills:`. If you are editing Perl without that briefing, load
    `getty-perl-core` first. See Delegation below.
 
 7. **`use Module;` to load modules.** Only use `require` when there's a
@@ -165,7 +165,7 @@ yourself — the principle is a shared house rule (skilletor bundle
 What the Docker daemon itself accepts or answers is not this repo's question —
 it belongs to `../p5-api-docker`, as a ticket on that repo's board.
 
-The agents carry their skills via `briefing.skills` (see `.claude/agents/`);
+The agents carry their skills via `skills:` (see `.claude/agents/`);
 the main agent delegates rather than loading them. Skill sources live under
 `.claude/skills/`, architecture and invariants in `dzil-docker-core`.
 
